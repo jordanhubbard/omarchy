@@ -151,7 +151,7 @@ create() {
   read_config
   require_rclone
   stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-backup.XXXXXX")
-  trap 'rm -rf "$stage"' RETURN
+  trap "rm -rf -- $(printf '%q' "$stage")" EXIT
   make_archive "$stage"
   destination=$(remote_destination)
   timestamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -245,7 +245,7 @@ sync() {
     fi
     if ! git ls-remote --exit-code --heads "$PROFILE_REPO" main >/dev/null 2>&1; then
       stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-profile.XXXXXX")
-      trap 'rm -rf "$stage"' RETURN
+      trap "rm -rf -- $(printf '%q' "$stage")" EXIT
       git -C "$stage" init --quiet
       git -C "$stage" checkout --quiet -b main
       git -C "$stage" -c user.name="Omarchy profile" -c user.email="profile@omarchy" commit --quiet --allow-empty -m "Initialize shared profile"
@@ -262,7 +262,7 @@ sync() {
   push)
     [[ -n $PROFILE_REPO ]] || fail "No shared profile repository is configured. Run: omarchy backup sync setup --repo <ssh-git-url>"
     stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-profile.XXXXXX")
-    trap 'rm -rf "$stage"' RETURN
+    trap "rm -rf -- $(printf '%q' "$stage")" EXIT
     repo="$stage/repo"
     git clone --quiet "$PROFILE_REPO" "$repo"
     branch="profiles/$DEVICE"
@@ -285,7 +285,7 @@ sync() {
   pull)
     [[ -n $PROFILE_REPO ]] || fail "No shared profile repository is configured. Run: omarchy backup sync setup --repo <ssh-git-url>"
     stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-profile.XXXXXX")
-    trap 'rm -rf "$stage"' RETURN
+    trap "rm -rf -- $(printf '%q' "$stage")" EXIT
     repo="$stage/repo"
     git clone --quiet --branch main "$PROFILE_REPO" "$repo"
     restore_dir="$stage/settings"
@@ -304,14 +304,14 @@ sync() {
   history)
     [[ -n $PROFILE_REPO ]] || fail "No shared profile repository is configured."
     stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-profile.XXXXXX")
-    trap 'rm -rf "$stage"' RETURN
+    trap "rm -rf -- $(printf '%q' "$stage")" EXIT
     git clone --quiet "$PROFILE_REPO" "$stage/repo"
     git -C "$stage/repo" log --all --decorate --oneline
     ;;
   merge)
     [[ -n $PROFILE_REPO ]] || fail "No shared profile repository is configured."
     stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-profile.XXXXXX")
-    trap 'rm -rf "$stage"' RETURN
+    trap "rm -rf -- $(printf '%q' "$stage")" EXIT
     repo="$stage/repo"
     git clone --quiet --branch main "$PROFILE_REPO" "$repo"
     if (( ${#profiles[@]} == 0 )); then
@@ -333,7 +333,7 @@ sync() {
     revision="${profiles[0]:-}"
     [[ -n $revision ]] || fail "Rollback needs a commit from: omarchy backup sync history"
     stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-profile.XXXXXX")
-    trap 'rm -rf "$stage"' RETURN
+    trap "rm -rf -- $(printf '%q' "$stage")" EXIT
     repo="$stage/repo"
     git clone --quiet --branch main "$PROFILE_REPO" "$repo"
     git -C "$repo" rev-parse --verify "$revision^{commit}" >/dev/null || fail "Unknown profile revision: $revision"
@@ -368,7 +368,7 @@ restore() {
   read_config
   require_rclone
   stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-restore.XXXXXX")
-  trap 'rm -rf "$stage"' RETURN
+  trap "rm -rf -- $(printf '%q' "$stage")" EXIT
   destination=$(remote_destination)
   backup="$stage/$ARCHIVE_NAME"
   rclone copyto "$destination/latest-$ARCHIVE_NAME" "$backup"
