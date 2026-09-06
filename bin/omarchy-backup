@@ -146,8 +146,8 @@ create() {
     --exclude '.config/omarchy/backup/**'
     --exclude '.local/state/omarchy/backup/**'
   )
-  rclone copy "$HOME" "$destination/$timestamp" "${filters[@]}" --retries 5 --low-level-retries 10 --stats 30s
-  rclone copy "$HOME" "$destination/latest" "${filters[@]}" --retries 5 --low-level-retries 10 --stats 30s
+  rclone copy "$HOME" "$destination/$timestamp" "${filters[@]}" --links --retries 5 --low-level-retries 10 --stats 30s
+  rclone copy "$HOME" "$destination/latest" "${filters[@]}" --links --retries 5 --low-level-retries 10 --stats 30s
   echo "Saved your home directory to $destination/$timestamp"
 }
 
@@ -356,7 +356,7 @@ restore() {
   destination=$(remote_destination)
   restore_dir="$stage/home"
   mkdir -p "$restore_dir"
-  rclone copy "$destination/latest" "$restore_dir" --retries 5 --low-level-retries 10 --stats 30s
+  rclone copy "$destination/latest" "$restore_dir" --links --retries 5 --low-level-retries 10 --stats 30s
 
   echo "Home-directory items to restore:"
   find "$restore_dir" -mindepth 1 -maxdepth 1 -printf '  %f\n' | sort
