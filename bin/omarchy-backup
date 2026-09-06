@@ -9,7 +9,6 @@ set -euo pipefail
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 CONFIG_DIR="$CONFIG_HOME/omarchy/backup"
 CONFIG_FILE="$CONFIG_DIR/settings.conf"
-ARCHIVE_NAME="personal-home.tar.gz"
 
 usage() {
   cat <<'EOF'
@@ -22,7 +21,7 @@ to the backup.
 
   setup [--remote NAME] [--path PATH] [--device NAME]
                                         Configure the cloud remote, shared folder, and this device's subfolder
-  create                              Upload a fresh personal-home archive
+  create                              Upload a live, file-by-file home backup
   restore [--dry-run] [--yes]          Preview or restore the latest archive
   sync <setup|push|pull|merge|history|rollback|status> [options]
                                         Version and merge portable personal settings between devices
@@ -130,41 +129,26 @@ setup() {
   echo "Cloud backups for $DEVICE will be stored in $(remote_destination)"
 }
 
-make_archive() {
-  local stage="$1"
-
-  # This is deliberately a home backup, not only an Omarchy config backup:
-  # projects, documents, dotfiles, and application data are all included.
-  # Exclude only regenerable data and credentials that need to be configured on
-  # the restoring machine before it can reach the cloud remote.
-  tar -C "$HOME" -czf "$stage/$ARCHIVE_NAME" \
-    --exclude='./.cache' \
-    --exclude='./.local/share/Trash' \
-    --exclude='./.config/rclone' \
-    --exclude='./.config/omarchy/backup' \
-    --exclude='./.local/state/omarchy/backup' \
-    .
-}
-
 create() {
-  local stage destination timestamp
+  local destination timestamp
   read_config
   require_rclone
-  stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-backup.XXXXXX")
-  trap "rm -rf -- $(printf '%q' "$stage")" EXIT
-  make_archive "$stage"
   destination=$(remote_destination)
   timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-  rclone copyto "$stage/$ARCHIVE_NAME" "$destination/$timestamp-$ARCHIVE_NAME"
-  rclone copyto "$stage/$ARCHIVE_NAME" "$destination/latest-$ARCHIVE_NAME"
-  echo "Saved your home directory to $destination/$timestamp-$ARCHIVE_NAME"
-}
 
-safe_archive() {
-  local archive="$1" entry
-  while IFS= read -r entry; do
-    [[ $entry != /* && $entry != *"../"* && $entry != *"/.." ]] || return 1
-  done < <(tar -tzf "$archive")
+  # Copying individual files makes this a live backup: a build or editor can
+  # continue changing unrelated paths while rclone retries any file that races
+  # with a transfer. Each completed directory is independently restorable.
+  local -a filters=(
+    --exclude '.cache/**'
+    --exclude '.local/share/Trash/**'
+    --exclude '.config/rclone/**'
+    --exclude '.config/omarchy/backup/**'
+    --exclude '.local/state/omarchy/backup/**'
+  )
+  rclone copy "$HOME" "$destination/$timestamp" "${filters[@]}" --retries 5 --low-level-retries 10 --stats 30s
+  rclone copy "$HOME" "$destination/latest" "${filters[@]}" --retries 5 --low-level-retries 10 --stats 30s
+  echo "Saved your home directory to $destination/$timestamp"
 }
 
 persona_paths() {
@@ -351,7 +335,7 @@ sync() {
 }
 
 restore() {
-  local dry_run="false" assume_yes="false" stage destination backup restore_dir
+  local dry_run="false" assume_yes="false" stage destination restore_dir
   while (( $# > 0 )); do
     case "$1" in
     --dry-run) dry_run="true" ;;
@@ -370,12 +354,9 @@ restore() {
   stage=$(mktemp -d "${TMPDIR:-/tmp}/omarchy-restore.XXXXXX")
   trap "rm -rf -- $(printf '%q' "$stage")" EXIT
   destination=$(remote_destination)
-  backup="$stage/$ARCHIVE_NAME"
-  rclone copyto "$destination/latest-$ARCHIVE_NAME" "$backup"
-  safe_archive "$backup" || fail "The cloud archive has an unsafe layout; refusing to restore it."
   restore_dir="$stage/home"
   mkdir -p "$restore_dir"
-  tar --no-same-owner --no-same-permissions -xzf "$backup" -C "$restore_dir"
+  rclone copy "$destination/latest" "$restore_dir" --retries 5 --low-level-retries 10 --stats 30s
 
   echo "Home-directory items to restore:"
   find "$restore_dir" -mindepth 1 -maxdepth 1 -printf '  %f\n' | sort
@@ -395,7 +376,7 @@ status() {
   read_config
   require_rclone
   echo "Cloud backup: $(remote_destination)"
-  rclone lsf "$(remote_destination)" --include "latest-$ARCHIVE_NAME" || true
+  rclone lsf "$(remote_destination)/latest" || true
 }
 
 command="${1:-}"

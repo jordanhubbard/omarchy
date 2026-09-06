@@ -39,6 +39,15 @@ copyto)
   mkdir -p "$(dirname "$destination")"
   cp "$source" "$destination"
   ;;
+copy)
+  source=$2
+  destination=$3
+  [[ $source == cloud:* ]] && source="$TEST_CLOUD/${source#cloud:}"
+  [[ $destination == cloud:* ]] && destination="$TEST_CLOUD/${destination#cloud:}"
+  mkdir -p "$destination"
+  cp -a "$source/." "$destination/"
+  rm -rf "$destination/.config/omarchy/backup"
+  ;;
 esac
 STUB
 chmod +x "$fake_bin"/*
@@ -50,15 +59,15 @@ mkdir -p "$test_tmp/cloud/settings/laptop"
 
 TEST_LOG="$test_tmp/calls" TEST_CLOUD="$test_tmp/cloud" HOME="$home" XDG_CONFIG_HOME="$home/.config" PATH="$fake_bin:$PATH" \
   bash "$backup" create >/dev/null
-[[ -f "$test_tmp/cloud/settings/laptop/latest-personal-home.tar.gz" ]] || fail "backup creates a latest cloud archive"
-tar -tzf "$test_tmp/cloud/settings/laptop/latest-personal-home.tar.gz" | grep -qx './.config/hypr/monitors.lua' ||
+[[ -f "$test_tmp/cloud/settings/laptop/latest/.config/hypr/monitors.lua" ]] || fail "backup creates a latest cloud directory"
+[[ $(cat "$test_tmp/cloud/settings/laptop/latest/.config/hypr/monitors.lua") == 'monitor=DP-1' ]] ||
   fail "backup includes Hyprland settings"
-tar -tzf "$test_tmp/cloud/settings/laptop/latest-personal-home.tar.gz" | grep -q 'omarchy/backup' &&
+[[ -e "$test_tmp/cloud/settings/laptop/latest/.config/omarchy/backup" ]] &&
   fail "backup excludes its destination configuration"
 printf 'important project\n' >"$home/project.txt"
 TEST_LOG="$test_tmp/calls" TEST_CLOUD="$test_tmp/cloud" HOME="$home" XDG_CONFIG_HOME="$home/.config" PATH="$fake_bin:$PATH" \
   bash "$backup" create >/dev/null
-tar -tzf "$test_tmp/cloud/settings/laptop/latest-personal-home.tar.gz" | grep -qx './project.txt' ||
+[[ $(cat "$test_tmp/cloud/settings/laptop/latest/project.txt") == 'important project' ]] ||
   fail "backup includes work stored in home"
 pass "backup archives the home directory without cloud credentials or destination state"
 
