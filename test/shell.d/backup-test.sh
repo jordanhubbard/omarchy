@@ -48,6 +48,16 @@ copy)
   cp -a "$source/." "$destination/"
   rm -rf "$destination/.config/omarchy/backup"
   ;;
+sync)
+  source=$2
+  destination=$3
+  [[ $source == cloud:* ]] && source="$TEST_CLOUD/${source#cloud:}"
+  [[ $destination == cloud:* ]] && destination="$TEST_CLOUD/${destination#cloud:}"
+  rm -rf "$destination"
+  mkdir -p "$destination"
+  cp -a "$source/." "$destination/"
+  rm -rf "$destination/.config/omarchy/backup"
+  ;;
 esac
 STUB
 chmod +x "$fake_bin"/*

@@ -147,7 +147,7 @@ create() {
     --exclude '.local/state/omarchy/backup/**'
   )
   rclone copy "$HOME" "$destination/$timestamp" "${filters[@]}" --links --retries 5 --low-level-retries 10 --stats 30s
-  rclone copy "$HOME" "$destination/latest" "${filters[@]}" --links --retries 5 --low-level-retries 10 --stats 30s
+  rclone sync "$HOME" "$destination/latest" "${filters[@]}" --links --retries 5 --low-level-retries 10 --stats 30s
   echo "Saved your home directory to $destination/$timestamp"
 }
 
