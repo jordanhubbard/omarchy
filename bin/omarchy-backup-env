@@ -86,18 +86,17 @@ backup_local_destination_present() {
 backup_write_settings() {
   mkdir -p "$BACKUP_CONFIG_DIR"
 
-  cat >"$BACKUP_SETTINGS_FILE" <<SETTINGS
-# Omarchy backup settings. Credentials live in $BACKUP_SECRETS_DIR, not here.
-BACKUP_DESTINATION_LABEL="$BACKUP_DESTINATION_LABEL"
-BACKUP_DESTINATION_KIND="$BACKUP_DESTINATION_KIND"
-BACKUP_DESTINATION_UUID="$BACKUP_DESTINATION_UUID"
-BACKUP_KEEP_HOURLY=$BACKUP_KEEP_HOURLY
-BACKUP_KEEP_DAILY=$BACKUP_KEEP_DAILY
-BACKUP_KEEP_WEEKLY=$BACKUP_KEEP_WEEKLY
-BACKUP_KEEP_MONTHLY=$BACKUP_KEEP_MONTHLY
-BACKUP_MAINTENANCE_HOST="$BACKUP_MAINTENANCE_HOST"
-BACKUP_BATTERY_FLOOR=$BACKUP_BATTERY_FLOOR
-SETTINGS
+  local name
+  umask 077
+  {
+    echo '# Omarchy backup settings. Credentials are stored separately.'
+    for name in BACKUP_DESTINATION_LABEL BACKUP_DESTINATION_KIND BACKUP_DESTINATION_UUID \
+      BACKUP_KEEP_HOURLY BACKUP_KEEP_DAILY BACKUP_KEEP_WEEKLY BACKUP_KEEP_MONTHLY \
+      BACKUP_MAINTENANCE_HOST BACKUP_BATTERY_FLOOR; do
+      printf '%s=%q\n' "$name" "${!name}"
+    done
+  } >"$BACKUP_SETTINGS_FILE"
+
 }
 
 # restic reads exclude patterns literally: a `~/` pattern excludes a directory
@@ -207,4 +206,10 @@ backup_pause_active() {
   # resume on its own rather than waiting for someone to press Resume.
   rm -f "$BACKUP_PAUSE_FILE"
   return 1
+}
+
+# Only successfully completed Omarchy runs are eligible for automatic recovery.
+# The marker is in the repository, so this also works on a replacement computer.
+backup_complete_snapshots() {
+  backup_restic snapshots --json --tag omarchy,omarchy-complete "$@"
 }

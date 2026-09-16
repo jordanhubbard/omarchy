@@ -41,6 +41,10 @@ backup)
   [[ ${STUB_BACKUP_EXIT:-0} == 0 ]] || echo "restic said no" >&2
   exit "${STUB_BACKUP_EXIT:-0}"
   ;;
+tag)
+  if [[ ${STUB_TAG_FAIL:-0} == 1 ]]; then exit 1; fi
+  echo '{"message_type":"changed","new_snapshot_id":"abcd1234"}'
+  ;;
 snapshots)
   printf '[{"short_id":"abcd1234","time":"2026-08-22T10:00:00.123456+02:00","hostname":"%s","paths":["/home/x"]}]\n' "$(hostname)"
   ;;
@@ -192,3 +196,9 @@ printf '%s 0\n' "$(( $(date +%s) - 40 * 86400 ))" >"$state_dir/maintenance"
 run_backup
 ! grep -q 'restic forget' "$test_tmp/calls.log" || fail "only the maintenance host prunes"
 pass "machines that do not own maintenance never prune or check"
+
+complete_snapshot=$(field '.last_complete.snapshot')
+STUB_TAG_FAIL=1 run_backup
+[[ $(field '.last_backup.result') == failed ]] || fail 'a failed completion marker is reported as failure'
+[[ $(field '.last_complete.snapshot') == "$complete_snapshot" ]] || fail 'a failed marker never advances recovery'
+pass 'tagging failure cannot publish an unverified recovery point'

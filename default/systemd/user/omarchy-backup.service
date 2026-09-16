@@ -7,6 +7,6 @@ ConditionPathExists=%h/.local/share/omarchy/backup/env
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/omarchy-backup-run
+ExecStart=/usr/bin/env omarchy-backup-run
 Nice=10
 IOSchedulingClass=idle

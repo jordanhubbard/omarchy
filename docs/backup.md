@@ -78,3 +78,9 @@ Retention defaults to `--keep-hourly 24 --keep-daily 7 --keep-weekly 5 --keep-mo
 ## Panel
 
 `shell/plugins/panels/backup/` is a first-party bar widget. `Service.qml` watches `status.json` with a `FileView`, plus a second `FileView` on the containing directory — the runner replaces the file by rename, and a `FileView` loses a file that is replaced rather than modified. `Model.js` is pure JavaScript that both the panel and `test/shell.d/backup-model-test.sh` load, so the display logic is tested without a compositor. Actions shell out to the same CLI a person would use, with an optimistic pause flag so the button reacts before the state file catches up.
+
+## Completion and recovery
+
+The runner adds `omarchy-complete` only after restic exits successfully. Tagging rewrites the snapshot object, so status records the new snapshot ID. Tag failure is a failed run and does not advance the last-complete marker. Default and date-based restore query the repository for `omarchy,omarchy-complete` snapshots filtered by hostname; they never fall back to unqualified `latest`. Explicit IDs remain available for partial and legacy backups.
+
+Restore fails if the download fails or the requested path is absent. In-place recovery downloads first, moves the previous path aside, then replaces it. The interactive path selects a host, a complete snapshot, and a home-relative path. Setup stages candidate credentials until the repository probe succeeds and stops the previous timer before activating a new destination. Setup without a verified first backup leaves the timer disabled. Retention is restricted to this host's `omarchy` snapshots.

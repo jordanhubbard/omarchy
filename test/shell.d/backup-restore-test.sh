@@ -108,3 +108,51 @@ set -e
 (( status != 0 )) || fail "restoring from before the first backup fails"
 grep -q 'no backup from before' "$test_tmp/at-error" || fail "the failure says why" "$(cat "$test_tmp/at-error")"
 pass "asking for a version older than the oldest backup fails clearly"
+
+real_restic=$(command -v restic)
+repo_command() {
+  RESTIC_REPOSITORY="$test_tmp/repo" RESTIC_PASSWORD='test-passphrase' "$real_restic" "$@"
+}
+
+# Completion is discoverable after losing the local state, and a later unmarked
+# (partial/interrupted/legacy) snapshot cannot silently replace it.
+printf 'not verified\n' >"$fake_home/Documents/note.txt"
+repo_command backup --quiet --tag omarchy "$fake_home" >/dev/null
+rm "$status_file"
+omarchy backup-restore "$fake_home/Documents/note.txt" >"$test_tmp/reinstall-output"
+recovered=$(sed -n 's/^Recovered files: //p' "$test_tmp/reinstall-output")
+[[ $(<"$recovered") == 'a note' ]] || fail 'reinstall selects the last repository-marked complete snapshot'
+pass 'completion markers survive reinstall and exclude newer unverified backups'
+
+# A shared repository's newest snapshot may belong to a different machine.
+printf 'second machine\n' >"$fake_home/Documents/note.txt"
+other_id=$(repo_command backup --json --host second-machine --tag omarchy "$fake_home" | jq -r 'select(.message_type == "summary") | .snapshot_id')
+repo_command tag --add omarchy-complete "$other_id" >/dev/null
+omarchy backup-restore Documents/note.txt --host second-machine >"$test_tmp/other-output"
+recovered=$(sed -n 's/^Recovered files: //p' "$test_tmp/other-output")
+[[ $(<"$recovered") == 'second machine' ]] || fail 'host selection restores the chosen machine'
+omarchy backup-restore Documents/note.txt >"$test_tmp/default-host-output"
+recovered=$(sed -n 's/^Recovered files: //p' "$test_tmp/default-host-output")
+[[ $(<"$recovered") == 'a note' ]] || fail 'default recovery stays on this machine'
+pass 'shared-repository recovery keeps host selection explicit'
+
+if omarchy backup-restore Documents/note.txt --host never-backed-up >/dev/null 2>&1; then
+  fail 'missing host must not fall back to another machine'
+fi
+pass 'a missing host never falls back to an unrelated backup'
+
+# If the download fails, in-place recovery must neither claim success nor
+# move/overwrite the current file. Snapshot discovery still uses real restic.
+export TEST_REAL_RESTIC="$real_restic"
+stub restic <<'STUB'
+#!/bin/bash
+if [[ " $* " == *' restore '* ]]; then exit 42; fi
+exec "$TEST_REAL_RESTIC" "$@"
+STUB
+printf 'precious live edit\n' >"$fake_home/Documents/note.txt"
+if printf 'restore\n' | omarchy backup-restore Documents/note.txt --in-place >"$test_tmp/failed-output" 2>&1; then
+  fail 'a failed download must return failure'
+fi
+[[ $(<"$fake_home/Documents/note.txt") == 'precious live edit' ]] || fail 'failed recovery leaves the live file intact'
+! grep -q '^Restored ' "$test_tmp/failed-output" || fail 'a failed restore cannot announce success'
+pass 'download failure leaves live files intact and reports failure'

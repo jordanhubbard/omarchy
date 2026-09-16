@@ -45,6 +45,7 @@ Panel {
       rows.push({id: "pause", glyph: "󰏤", label: "Pause for an hour", detail: "Scheduled runs wait until then"})
     }
 
+    rows.push({id: "restore", glyph: "󰁯", label: "Recover files", detail: "Choose a computer, backup, and path"})
     rows.push({id: "browse", glyph: "󰉋", label: "Browse older versions", detail: "Every backup as a dated folder"})
     return rows
   }
@@ -84,6 +85,7 @@ Panel {
     case "now": backup.backUpNow(); break
     case "pause": backup.pause("1h"); break
     case "resume": backup.resume(); break
+    case "restore": backup.restore(); break
     case "browse": backup.browse(); break
     }
   }
@@ -187,6 +189,7 @@ Panel {
             iconOpacity: backup.paused ? 0.5 : 1.0
             iconComponent: Component {
               Text {
+                textFormat: Text.PlainText
                 text: root.glyph
                 color: backup.attention ? root.urgent : root.foreground
                 font.family: root.fontFamily
@@ -216,6 +219,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             visible: root.problemText !== ""
             width: parent.width
             text: root.problemText
@@ -323,6 +327,7 @@ Panel {
       spacing: Style.space(8)
 
       Text {
+        textFormat: Text.PlainText
         text: actionRow.action ? actionRow.action.glyph : ""
         color: root.foreground
         font.family: root.fontFamily
@@ -336,6 +341,7 @@ Panel {
         spacing: Style.space(1)
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: actionRow.action ? actionRow.action.label : ""
           color: root.foreground
@@ -345,6 +351,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: actionRow.action ? actionRow.action.detail : ""
           color: root.dim
@@ -391,6 +398,7 @@ Panel {
         spacing: Style.space(1)
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: Model.snapshotLabel(snapshotRow.snapshot, backup.nowMs)
           color: root.foreground
@@ -400,6 +408,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: snapshotRow.snapshot ? String(snapshotRow.snapshot.id || "") : ""
           color: root.dim
@@ -430,6 +439,7 @@ Panel {
   }
 
   component InfoLabel: Text {
+    textFormat: Text.PlainText
     color: root.foreground
     opacity: 0.6
     font.family: root.fontFamily
@@ -437,6 +447,7 @@ Panel {
   }
 
   component InfoValue: Text {
+    textFormat: Text.PlainText
     color: root.foreground
     font.family: root.fontFamily
     font.pixelSize: Style.font.bodySmall

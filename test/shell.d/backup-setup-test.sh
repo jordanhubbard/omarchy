@@ -75,7 +75,7 @@ pass "credentials and passphrase are written privately, and separately"
 # not ride along with it.
 ! grep -rq "correct-horse-battery-staple" "$config_dir" || fail "the passphrase is not in ~/.config"
 ! grep -rq "RESTIC_REPOSITORY" "$config_dir" 2>/dev/null || fail "credentials are not in ~/.config"
-grep -q "BACKUP_MAINTENANCE_HOST=\"$(hostname)\"" "$config_dir/settings" ||
+grep -q "BACKUP_MAINTENANCE_HOST=$(hostname)" "$config_dir/settings" ||
   fail "the machine that set the repository up owns maintenance" "$(cat "$config_dir/settings")"
 pass "only non-secret settings land in ~/.config"
 
@@ -88,9 +88,9 @@ pass "the recovery card explains the restore without holding the keys"
 
 [[ -L $unit_dir/omarchy-backup.timer ]] || fail "the timer is linked into the user's units"
 [[ -L $unit_dir/omarchy-backup.service ]] || fail "the service is linked into the user's units"
-grep -q 'systemctl --user enable --now omarchy-backup.timer' "$test_tmp/calls.log" || fail "the schedule is enabled"
-grep -q 'omarchy-plugin-enable omarchy.backup' "$test_tmp/calls.log" || fail "the bar widget is placed"
-pass "the schedule and the widget arrive together, at the end"
+! grep -q 'systemctl --user enable --now omarchy-backup.timer' "$test_tmp/calls.log" || fail "unverified backups must not enable a timer"
+! grep -q 'omarchy-plugin-enable omarchy.backup' "$test_tmp/calls.log" || fail "unverified backups must not show a healthy widget"
+pass "unverified setup leaves scheduling disabled"
 
 # Re-running the wizard must not double up or fail on what already exists.
 : >"$test_tmp/calls.log"
@@ -128,3 +128,48 @@ grep -q 'omarchy-plugin-disable omarchy.backup' "$test_tmp/calls.log" || fail "r
 [[ ! -e $unit_dir/omarchy-backup.timer ]] || fail "removal unlinks the units"
 grep -qi 'untouched' "$test_tmp/removal" || fail "removal says the backups themselves are still there" "$(cat "$test_tmp/removal")"
 pass "removal forgets the destination without pretending to delete the backups"
+
+# Values saved for later sourcing must remain literal, including shell syntax.
+literal_secret='a secret with spaces $(false) `false` "quotes"'
+printf '%s' "$literal_secret" >"$test_tmp/access-key"
+setup --repository "$test_tmp/repo with spaces" --secret-access-key-file "$test_tmp/access-key" --passphrase-file "$test_tmp/passphrase" --no-first-backup >/dev/null
+saved_secret=$(source "$secrets_dir/env"; printf '%s' "$AWS_SECRET_ACCESS_KEY")
+[[ $saved_secret == "$literal_secret" ]] || fail 'credential characters must round-trip literally'
+saved_repository=$(source "$secrets_dir/env"; printf '%s' "$RESTIC_REPOSITORY")
+[[ $saved_repository == "$test_tmp/repo with spaces" ]] || fail 'repository paths with spaces must round-trip'
+pass 'credential and repository values are quoted for literal reload'
+
+cp "$secrets_dir/env" "$test_tmp/previous-env"
+cp "$secrets_dir/passphrase" "$test_tmp/previous-passphrase"
+printf 'incorrect candidate\n' >"$test_tmp/bad-passphrase"
+if STUB_PROBE_EXIT=12 setup --repository "$test_tmp/different-repo" --passphrase-file "$test_tmp/bad-passphrase" --no-first-backup >/dev/null 2>&1; then
+  fail 'incorrect candidate credentials must fail'
+fi
+cmp "$secrets_dir/env" "$test_tmp/previous-env" || fail 'failed setup preserves working credentials'
+cmp "$secrets_dir/passphrase" "$test_tmp/previous-passphrase" || fail 'failed setup preserves working passphrase'
+pass 'failed reconfiguration preserves the working backup credentials'
+
+stub systemctl <<'STUB'
+#!/bin/bash
+printf 'systemctl %s\n' "$*" >>"$TEST_LOG"
+if [[ $* == '--user start omarchy-backup.service' ]]; then
+  mkdir -p "$HOME/.local/state/omarchy/backup"
+  printf '{"run_id":"%s","last_backup":{"result":"%s","unreadable":["test-file"]}}' "$RANDOM" "${STUB_FIRST_RESULT:-partial}" >"$HOME/.local/state/omarchy/backup/status.json"
+fi
+STUB
+: >"$test_tmp/calls.log"
+if setup --repository "$test_tmp/repo" --passphrase-file "$test_tmp/passphrase" >/dev/null 2>&1; then
+  fail 'an incomplete first backup must not complete setup'
+fi
+! grep -q 'enable --now omarchy-backup.timer' "$test_tmp/calls.log" || fail 'an incomplete first backup cannot enable scheduling'
+pass 'an incomplete first backup leaves scheduling off'
+
+: >"$test_tmp/calls.log"
+STUB_FIRST_RESULT=complete setup --repository "$test_tmp/repo" --passphrase-file "$test_tmp/passphrase" >/dev/null
+grep -q 'enable --now omarchy-backup.timer' "$test_tmp/calls.log" || fail 'a complete verified backup enables scheduling'
+pass 'a complete first run enables the backup schedule'
+
+: >"$test_tmp/calls.log"
+if setup --repository >/dev/null 2>&1; then fail 'missing repository value must fail before prompting'; fi
+[[ ! -s $test_tmp/calls.log ]] || fail 'invalid arguments must not configure anything'
+pass 'missing setup arguments fail before changing backup configuration'

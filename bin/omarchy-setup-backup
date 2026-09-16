@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # omarchy:summary=Set up encrypted, versioned, off-site backups of your home folder
-# omarchy:args=[--repository <url>] [--access-key-id <id>] [--secret-access-key <key>] [--passphrase-file <path>] [--no-first-backup] [--remove]
+# omarchy:args=[--repository <url>] [--access-key-id <id>] [--secret-access-key-file <path>] [--passphrase-file <path>] [--no-first-backup] [--remove]
 # omarchy:examples=omarchy setup backup | omarchy setup backup --remove
 
 set -eo pipefail
@@ -17,23 +17,33 @@ FIRST_BACKUP="true"
 REMOVE="false"
 RECOVERY_CARD="$HOME/Omarchy Backup Recovery.txt"
 
+require_value() {
+  if [[ -z ${2:-} || $2 == -* ]]; then
+    echo "$1 needs a value." >&2
+    exit 2
+  fi
+}
+
 while (( $# > 0 )); do
   case "$1" in
-  --repository) shift; REPOSITORY="${1:-}" ;;
+  --repository) require_value "$@"; shift; REPOSITORY="${1:-}" ;;
   --repository=*) REPOSITORY="${1#--repository=}" ;;
-  --access-key-id) shift; ACCESS_KEY_ID="${1:-}" ;;
+  --access-key-id) require_value "$@"; shift; ACCESS_KEY_ID="${1:-}" ;;
   --access-key-id=*) ACCESS_KEY_ID="${1#--access-key-id=}" ;;
-  --secret-access-key) shift; SECRET_ACCESS_KEY="${1:-}" ;;
-  --secret-access-key=*) SECRET_ACCESS_KEY="${1#--secret-access-key=}" ;;
-  --region) shift; REGION="${1:-}" ;;
+  --secret-access-key-file)
+    shift
+    [[ -n ${1:-} && -r $1 ]] || { echo 'A readable secret-access-key file is required.' >&2; exit 2; }
+    SECRET_ACCESS_KEY=$(<"$1")
+    ;;
+  --region) require_value "$@"; shift; REGION="${1:-}" ;;
   --region=*) REGION="${1#--region=}" ;;
-  --passphrase-file) shift; PASSPHRASE_FILE="${1:-}" ;;
+  --passphrase-file) require_value "$@"; shift; PASSPHRASE_FILE="${1:-}" ;;
   --passphrase-file=*) PASSPHRASE_FILE="${1#--passphrase-file=}" ;;
   --no-first-backup) FIRST_BACKUP="false" ;;
   --remove) REMOVE="true" ;;
   -h | --help)
     echo "Usage: omarchy setup backup [--repository <url>] [--access-key-id <id>]"
-    echo "                            [--secret-access-key <key>] [--region <region>]"
+    echo "                            [--secret-access-key-file <path>] [--region <region>]"
     echo "                            [--passphrase-file <path>] [--no-first-backup]"
     echo "                            [--remove]"
     echo
@@ -159,15 +169,7 @@ label_for_repository() {
 }
 
 generate_passphrase() {
-  local group=""
-  local groups=()
-
-  for _ in 1 2 3 4 5 6; do
-    group=$(LC_ALL=C tr -dc 'a-z2-9' </dev/urandom | head -c 5)
-    groups+=("$group")
-  done
-
-  printf '%s' "$(IFS=-; printf '%s' "${groups[*]}")"
+  python3 -c 'import secrets; print("-".join("".join(secrets.choice("abcdefghijklmnopqrstuvwxyz23456789") for _ in range(5)) for _ in range(6)))'
 }
 
 prompt_passphrase() {
@@ -206,15 +208,15 @@ write_secrets() {
   # passwordless anyway, and a locked one at 3am would mean no backup.
   umask 077
   {
-    printf 'RESTIC_REPOSITORY=%s\n' "$REPOSITORY"
+    printf 'RESTIC_REPOSITORY=%q\n' "$REPOSITORY"
     if [[ -n $ACCESS_KEY_ID ]]; then
-      printf 'AWS_ACCESS_KEY_ID=%s\n' "$ACCESS_KEY_ID"
+      printf 'AWS_ACCESS_KEY_ID=%q\n' "$ACCESS_KEY_ID"
     fi
     if [[ -n $SECRET_ACCESS_KEY ]]; then
-      printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$SECRET_ACCESS_KEY"
+      printf 'AWS_SECRET_ACCESS_KEY=%q\n' "$SECRET_ACCESS_KEY"
     fi
     if [[ -n $REGION ]]; then
-      printf 'AWS_DEFAULT_REGION=%s\n' "$REGION"
+      printf 'AWS_DEFAULT_REGION=%q\n' "$REGION"
     fi
   } >"$BACKUP_ENV_FILE"
   printf '%s\n' "$PASSPHRASE" >"$BACKUP_PASSPHRASE_FILE"
@@ -246,7 +248,7 @@ probe_repository() {
     abort "That passphrase does not open the repository. Nothing was changed."
     ;;
   *)
-    echo "$(tail -n 3 "$BACKUP_STATE_DIR/probe.log")" >&2
+    tail -n 3 "$BACKUP_STATE_DIR/probe.log" >&2
     abort "Could not reach the repository. Check the endpoint and credentials; nothing was created."
     ;;
   esac
@@ -261,8 +263,10 @@ offer_disaster_recovery() {
 
   [[ ${EXISTING_REPOSITORY:-false} == "true" ]] || return 0
 
-  mapfile -t hosts < <(restic snapshots --json 2>/dev/null |
-    jq -r --arg host "$(hostname)" '[.[] | select(.hostname != $host) | .hostname] | unique | .[]')
+  # Reinstalling with the same hostname is a recovery case too.
+  local snapshots snapshot
+  snapshots=$(backup_complete_snapshots --host "") || abort "Could not list complete backups."
+  mapfile -t hosts < <(jq -r '[.[].hostname] | unique | .[]' <<<"$snapshots")
   (( ${#hosts[@]} > 0 )) || return 0
 
   echo
@@ -274,20 +278,22 @@ offer_disaster_recovery() {
   source_host=$(gum choose "${hosts[@]}" --header "Restore from which machine?")
   [[ -n $source_host ]] || return 0
 
-  # The other machine's home folder is not necessarily at this machine's path,
-  # so the snapshot's own home directory is restored *as* this one rather than
-  # landing in ~/home/someone-else.
-  source_home=$(restic snapshots --json --host "$source_host" |
-    jq -r 'sort_by(.time) | last | .paths[0]')
+  # Map the old home into a staging directory, even when its username differs.
+  snapshot=$(jq -r --arg host "$source_host" '[.[] | select(.hostname == $host)] | sort_by(.time) | last | .id' <<<"$snapshots")
+  source_home=$(jq -r --arg id "$snapshot" '.[] | select(.id == $id) | .paths[0]' <<<"$snapshots")
 
-  echo -e "\e[33mRestoring $source_host:$source_home into $HOME.\e[0m"
-  echo "Files that already exist here under the same name are overwritten."
+  echo -e "\e[33mRecovering $source_host:$source_home into a new folder under $HOME/Restored.\e[0m"
+  echo "Your current home folder will not be overwritten."
   if ! gum confirm "Continue?"; then
     return 0
   fi
 
-  restic restore "latest:$source_home" --host "$source_host" --target "$HOME"
-  echo -e "\e[32mRestored. Look around $HOME before carrying on.\e[0m"
+  local stage
+  mkdir -p "$HOME/Restored"
+  stage=$(mktemp -d "$HOME/Restored/recovery.XXXXXX")
+  backup_restic restore "$snapshot:$source_home" --target "$stage"
+  echo "Recovered files are in $stage. Review them before copying anything into your home folder."
+  echo -e "\e[32mRecovery finished. Review the recovered folder before carrying on.\e[0m"
 }
 
 write_recovery_card() {
@@ -345,6 +351,8 @@ run_first_backup() {
   local pid=""
   local percent=0
   local result=""
+  local previous_run
+  previous_run=$(jq -r '.run_id // ""' "$BACKUP_STATUS_FILE" 2>/dev/null || true)
 
   echo -e "\n\e[32mBacking up for the first time. Later runs only send what changed.\e[0m"
   echo -n "Measuring your home folder... "
@@ -364,14 +372,18 @@ run_first_backup() {
   wait "$pid" || true
   printf '\r                    \r'
 
+  if [[ $(jq -r '.run_id // ""' "$BACKUP_STATUS_FILE" 2>/dev/null || true) == "$previous_run" ]]; then
+    abort 'The first backup did not run. Resolve any pause, power, or service error and run setup again.'
+  fi
   result=$(jq -r '.last_backup.result // ""' "$BACKUP_STATUS_FILE" 2>/dev/null || echo "")
   case "$result" in
   complete)
     echo -e "\e[32mFirst backup done.\e[0m"
     ;;
   partial)
-    echo -e "\e[33mFirst backup done, but some files could not be read:\e[0m"
+    echo -e "\e[33mFirst backup is incomplete. Scheduling remains off until a complete backup succeeds:\e[0m"
     jq -r '.last_backup.unreadable[]?' "$BACKUP_STATUS_FILE"
+    return 1
     ;;
   *)
     abort "The first backup failed: $(jq -r '.last_backup.error // "unknown error"' "$BACKUP_STATUS_FILE")"
@@ -400,8 +412,14 @@ elif backup_configured && gum confirm "Reuse the destination this machine is alr
   REPOSITORY="$RESTIC_REPOSITORY"
   PASSPHRASE=$(<"$BACKUP_PASSPHRASE_FILE")
   PASSPHRASE_FILE="$BACKUP_PASSPHRASE_FILE"
+  ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}"
+  SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}"
+  REGION="${AWS_DEFAULT_REGION:-}"
 else
   prompt_destination
+fi
+if [[ $REPOSITORY =~ ://[^/]*:[^/]*@ ]]; then
+  abort 'Use separate credential files instead of embedding a password in a repository URL.'
 fi
 record_phase "destination"
 
@@ -410,15 +428,33 @@ if [[ -z ${PASSPHRASE:-} ]]; then
 fi
 record_phase "passphrase"
 
+# Probe candidate credentials in a private staging directory. Failed setup
+# must not replace credentials used by an existing working backup.
+original_secrets_dir="$BACKUP_SECRETS_DIR"
+candidate_secrets=$(mktemp -d "$BACKUP_STATE_DIR/setup.XXXXXX")
+trap 'rm -rf -- "$candidate_secrets"' EXIT
+BACKUP_SECRETS_DIR="$candidate_secrets"
+BACKUP_ENV_FILE="$candidate_secrets/env"
+BACKUP_PASSPHRASE_FILE="$candidate_secrets/passphrase"
 write_secrets
 probe_repository
 record_phase "repository"
 
-offer_disaster_recovery
+if [[ -t 0 ]]; then
+  offer_disaster_recovery
+fi
+
+# Stop the old schedule before making an authenticated destination active.
+systemctl --user stop omarchy-backup.timer omarchy-backup.service 2>/dev/null || true
+BACKUP_SECRETS_DIR="$original_secrets_dir"
+BACKUP_ENV_FILE="$BACKUP_SECRETS_DIR/env"
+BACKUP_PASSPHRASE_FILE="$BACKUP_SECRETS_DIR/passphrase"
+write_secrets
+backup_load_credentials
 
 if [[ -z $BACKUP_MAINTENANCE_HOST ]]; then
-  # Whoever sets the repository up first owns pruning and checking it, so the
-  # expensive half of the work does not run on every machine sharing it.
+  # Maintenance is local to this host; retention never deletes another
+  # computer's snapshots in a shared repository.
   BACKUP_MAINTENANCE_HOST="$(hostname)"
 fi
 backup_write_settings
@@ -431,6 +467,9 @@ install_units
 
 if [[ $FIRST_BACKUP == "true" ]]; then
   run_first_backup
+else
+  echo 'Configured without a first backup. Scheduling is off. Run Setup > Backup to complete verification.'
+  exit 0
 fi
 record_phase "first-backup"
 

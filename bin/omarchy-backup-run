@@ -136,8 +136,23 @@ record_result() {
   local exit_code="$1"
   local snapshot=""
   local error=""
+  local tagged=""
 
   [[ -s $SUMMARY_FILE ]] && snapshot=$(jq -r '.snapshot_id // ""' "$SUMMARY_FILE")
+
+  # A repository-side completion tag survives loss of the local status file.
+  # Restic rewrites the snapshot ID when adding tags, so record the new ID.
+  if (( exit_code == 0 )); then
+    if [[ -n $snapshot ]] && tagged=$(backup_restic tag --json --add omarchy-complete "$snapshot" 2>"$STDERR_FILE"); then
+      snapshot=$(jq -rs '[.[] | select(.message_type == "changed") | .new_snapshot_id] | last // empty' <<<"$tagged")
+    else
+      snapshot=""
+    fi
+    if [[ -z $snapshot ]]; then
+      exit_code=1
+      echo 'Could not mark the snapshot complete; restore will not select it automatically.' >>"$STDERR_FILE"
+    fi
+  fi
 
   case "$exit_code" in
   0)
@@ -202,8 +217,8 @@ refresh_repository_facts() {
 maintenance_due() {
   local last=0
 
-  # Exactly one machine prunes and checks: the expensive, lock-contending half
-  # of the work has no reason to run on every laptop sharing the repository.
+  # A different maintenance host disables local maintenance. Forget is still
+  # restricted to this host: sharing credentials must not share retention policy.
   if [[ -n $BACKUP_MAINTENANCE_HOST && $BACKUP_MAINTENANCE_HOST != "$(hostname)" ]]; then
     return 1
   fi
@@ -229,6 +244,7 @@ run_maintenance() {
   backup_log "Running maintenance (forget --prune, check, read-data subset $subset/$READ_DATA_SUBSETS)"
 
   if ! backup_restic forget --prune \
+    --host "$(hostname)" --tag omarchy \
     --group-by host,paths \
     --keep-hourly "$BACKUP_KEEP_HOURLY" \
     --keep-daily "$BACKUP_KEEP_DAILY" \

@@ -72,6 +72,10 @@ Item {
 
   // Restores and browsing print, confirm, and can take a while, so they belong
   // in a terminal rather than behind a panel button that shows nothing.
+  function restore() {
+    Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation", "omarchy-backup-restore"])
+  }
+
   function browse() {
     Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation", "omarchy-backup-browse"])
   }

@@ -41,6 +41,14 @@
   "system.reboot": {"icon":"󰜉","label":"Reboot","action":"omarchy-system-reboot"},
   "system.shutdown": {"icon":"󰐥","label":"Shutdown","action":"omarchy-system-shutdown"},
 
+  "system.backup": {"icon":"󰁯","label":"Backups","description":"Encrypted file backups and recovery"},
+  "system.backup.status": {"icon":"󰋼","label":"Status","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-backup-status'"},
+  "system.backup.now": {"icon":"󰆓","label":"Back Up Now","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-backup-now'"},
+  "system.backup.restore": {"icon":"󰁯","label":"Recover Files","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-backup-restore'"},
+  "system.backup.browse": {"icon":"󰉋","label":"Browse Backups","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-backup-browse'"},
+  "system.backup.pause": {"icon":"󰏤","label":"Pause Backups","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-backup-pause'"},
+  "system.backup.resume": {"icon":"󰐊","label":"Resume Backups","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-backup-resume'"},
+
   // Learn
   "learn.keybindings": {"icon":"","label":"Keybindings","action":"omarchy-menu-keybindings"},
   "learn.omarchy": {"icon":"","label":"Omarchy","action":"omarchy-launch-webapp 'https://omarchy.org/manual/'"},

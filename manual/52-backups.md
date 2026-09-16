@@ -43,7 +43,7 @@ omarchy backup restore ~/Notes --in-place               # put it back where it w
 omarchy backup browse                                   # every backup as dated folders
 ```
 
-Restores land in `~/Restored/<timestamp>/` by default, so a restore never overwrites something you still have. `--in-place` does overwrite, after asking, and copies the current version into `~/Restored/` first — so even an in-place restore you regret is recoverable.
+Restores land in `~/Restored/<timestamp>/` by default, so a restore never overwrites something you still have. `--in-place` does overwrite, after asking, and moves the current version into `~/Restored/` first — so even an in-place restore you regret is recoverable.
 
 `omarchy backup browse` mounts every backup as a folder tree and opens the file manager on it. Browse to a date, drag out what you want, close the window. Nothing to learn.
 
@@ -70,15 +70,15 @@ Old backups are thinned out monthly: 24 hourly, 7 daily, 5 weekly, and 12 monthl
 
 Point the second machine at the same bucket and it just works: each machine's backups are kept separately, restores default to your own machine's, and nothing is ever merged or synced between them. Give your machines distinct hostnames — that name is how backups are told apart.
 
-The machine you set up first owns the monthly cleanup, so the expensive part of the job does not run on every laptop at once.
+Each machine applies retention only to its own Omarchy snapshots. Repository locks coordinate maintenance with concurrent backups.
 
 Worth knowing: every machine sharing a repository can read all of it. That is what makes the next section possible, and it means one compromised machine exposes the rest. If you want machines isolated from each other, give them separate buckets or prefixes.
 
 ## Starting over on a new machine
 
-This is the part that pays for the whole feature. Install Omarchy, run _Setup > Backup_, point it at the same bucket, and give it the passphrase. It finds the backups from your old machine and offers to restore that home folder into this one before anything else happens.
+This is the part that pays for the whole feature. Install Omarchy, run _Setup > Backup_, point it at the same bucket, and give it the passphrase. It finds the backups from your old machine and offers to recover that home folder into a new directory under `~/Restored` before the first backup.
 
-Your files, your configs, your keys, your projects — back where they were, on a machine that is an hour old.
+Review the recovered files there, then copy the files and preferences you want into your new home folder.
 
 ## What this does and does not protect you from
 
@@ -97,3 +97,15 @@ omarchy setup backup --remove
 ```
 
 That stops the schedule, removes the widget, and deletes the local credentials. Your backups stay in the bucket — this only forgets how to reach them. Delete them at the provider if that is what you meant, and keep the passphrase until you have.
+
+## Recovering files from another computer
+
+Use **System > Backups > Recover Files** to choose a computer, a completed backup, and a path relative to its home folder. The recovered files go into a new directory under `~/Restored`, where you can inspect them before copying them into your current home. A reinstall with the same hostname works too. The command-line equivalent is `omarchy backup restore Documents --host laptop`.
+
+Automatic recovery selects only snapshots marked complete in the repository. Partial backups remain available for explicit recovery by snapshot ID with `--at`; they never silently replace the latest complete backup. Older snapshots made before completion markers were introduced also require explicit selection. Losing the local status file does not lose the ability to identify complete snapshots.
+
+For `--in-place`, recovery first downloads successfully into staging, then asks for confirmation. The selected local file or directory is moved to `previous` in the recovery directory before the recovered version takes its place. This replaces the whole selected path, including deletions, while keeping the previous version available. Whole-home recovery always stays in staging.
+
+Choosing `--no-first-backup` configures a destination but leaves scheduling disabled. Rerun Setup > Backup to verify a first complete backup and enable hourly runs. An incomplete first run also leaves scheduling off. When using one repository for several computers, use distinct hostnames; retention only forgets this computer's Omarchy snapshots.
+
+For unattended setup, provide secrets through files: `omarchy setup backup --repository <url> --access-key-id <id> --secret-access-key-file <path> --passphrase-file <path>`. Secret values are never required as command-line arguments. Protect these files and keep your recovery passphrase separately.
