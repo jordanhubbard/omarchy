@@ -265,13 +265,13 @@ offer_disaster_recovery() {
 
   # Reinstalling with the same hostname is a recovery case too.
   local snapshots snapshot
-  snapshots=$(backup_complete_snapshots --host "") || abort "Could not list complete backups."
+  snapshots=$(backup_complete_snapshots) || abort "Could not list complete backups."
   mapfile -t hosts < <(jq -r '[.[].hostname] | unique | .[]' <<<"$snapshots")
   (( ${#hosts[@]} > 0 )) || return 0
 
   echo
   echo "This repository already holds backups from: ${hosts[*]}"
-  if ! gum confirm "Restore a home folder from one of them into $HOME first?"; then
+  if ! gum confirm "Recover a home folder from one of them into $HOME/Restored first?"; then
     return 0
   fi
 
