@@ -14,6 +14,8 @@ This fork tracks upstream Quattro and previews three independent continuity work
 | Keep preference history and share settings between computers | Setup > Preferences | System > Preferences |
 | Encrypt and back up home folders, including recovery from another computer | Setup > Backup | System > Backups and the backup bar widget |
 
+Existing `main` / `profiles/<computer>` repositories can use the fork’s [profile compatibility mode](docs/dots.md#existing-profile-repositories-fork-compatibility): publish a device profile, explicitly merge it, then apply shared settings. This keeps the compatibility layer out of the smaller upstream preference PR.
+
 Session restore and backups are opt-in. Preference publishing and pulling are explicit; conflicts stop for review, and applying settings keeps a local recovery snapshot. Hardware-specific configuration stays local. These features are independent: sharing preferences does not require setting up cloud backup.
 
 See [desktop sessions](manual/31-dotfiles.md#remembering-your-desktop), [preference sharing](manual/31-dotfiles.md#preference-history-and-sharing), and [backups](manual/52-backups.md) for their behavior and limits. These changes are not yet part of official Omarchy packages. To build an installable preview, use the standard [local-source ISO workflow](https://github.com/omacom/omarchy-iso#creating-the-iso) with this checkout and `omarchy-pkgs`, so both runtime commands and their default assets are installed together.

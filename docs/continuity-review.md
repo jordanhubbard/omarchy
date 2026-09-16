@@ -25,4 +25,13 @@ Screenshots were inspected. Live testing found and corrected truncated menu labe
 
 ## Limits
 
-Cloud providers were not tested with live credentials. Git tests used real local bare repositories; backup tests used real encrypted local restic repositories, including multiple host identities. The VM used the development-link workflow rather than a newly published package or rebuilt ISO. Default asset coverage was checked against the package definitions. The physical test host was not rebooted and its installed Omarchy was not switched to this fork.
+The original VM pass did not test cloud providers with live credentials. Git tests used real local bare repositories; backup tests used real encrypted local restic repositories, including multiple host identities. The VM used the development-link workflow rather than a newly published package or rebuilt ISO. Default asset coverage was checked against the package definitions. The physical test host was not rebooted and its installed Omarchy was not switched to this fork.
+
+
+## Live SSH deployment follow-up
+
+A live Omarchy machine subsequently completed an encrypted backup over its existing SSH connection to an SFTP repository. Recovery of a selected preference file matched the live file byte-for-byte. The hourly timer was enabled, and an additional private recovery-key copy was saved on a separate workstation. Previous file-copy backups were retained.
+
+An existing private Git repository using `main` and `profiles/<machine>` was connected through the fork-only compatibility mode. Its full history was bundled before changes. Initial conflicts were reviewed, a newer local shell alias was retained, shared terminal/desktop preferences were applied, and the device profile was published and merged into main. Machine-specific settings and other legacy repository entries were preserved.
+
+The expanded preference suite passes 17 real-Git tests. The full Arch run still passes 246 of 248 shell test files, with the same two upstream migration failures noted above. The smaller upstream preference PR remains independent of the legacy compatibility mode.
