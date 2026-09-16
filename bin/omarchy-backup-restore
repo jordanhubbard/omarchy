@@ -1,0 +1,121 @@
+#!/bin/bash
+
+# omarchy:summary=Recover a file or folder from a selected machine's backup
+# omarchy:args=[path] [--at <snapshot|time>] [--host <name>] [--in-place]
+# omarchy:examples=omarchy backup restore | omarchy backup restore Documents --host laptop | omarchy backup restore Notes --in-place
+
+set -euo pipefail
+source omarchy-backup-env
+
+TARGET_PATH=""
+AT=""
+SOURCE_HOST="$(hostname)"
+IN_PLACE=false
+
+while (( $# > 0 )); do
+  case "$1" in
+  --at|--host)
+    [[ -n ${2:-} && $2 != -* ]] || { echo "$1 needs a value." >&2; exit 2; }
+    if [[ $1 == '--at' ]]; then AT=$2; else SOURCE_HOST=$2; fi
+    shift
+    ;;
+  --in-place) IN_PLACE=true ;;
+  -h|--help)
+    echo 'Usage: omarchy backup restore [path] [--at <snapshot|time>] [--host <name>] [--in-place]'
+    echo 'Without a path, choose a machine, snapshot, and home-relative path interactively.'
+    echo 'Recovery goes into a new folder under ~/Restored. --in-place first preserves the current path.'
+    exit 0
+    ;;
+  -*) echo "Unknown option: $1" >&2; exit 2 ;;
+  *)
+    [[ -z $TARGET_PATH ]] || { echo 'Restore one path at a time.' >&2; exit 2; }
+    TARGET_PATH=$1
+    ;;
+  esac
+  shift
+done
+
+backup_configured || { echo 'Choose Setup > Backup first.' >&2; exit 1; }
+backup_load_credentials
+
+if [[ -z $TARGET_PATH ]]; then
+  snapshots=$(backup_complete_snapshots)
+  mapfile -t hosts < <(jq -r '[.[].hostname] | unique | .[]' <<<"$snapshots")
+  (( ${#hosts[@]} > 0 )) || { echo 'No complete Omarchy backups are available.' >&2; exit 1; }
+  SOURCE_HOST=$(gum choose --header 'Recover from which computer?' "${hosts[@]}") || exit 130
+  mapfile -t choices < <(jq -r --arg host "$SOURCE_HOST" '. | sort_by(.time) | reverse | .[] | select(.hostname == $host) | "\(.id)  \(.time)"' <<<"$snapshots")
+  selection=$(gum choose --header 'Choose a complete backup' "${choices[@]}") || exit 130
+  AT=${selection%% *}
+  TARGET_PATH=$(gum input --header 'Path inside the backed-up home folder' --prompt 'Path> ' --value '.') || exit 130
+fi
+
+# Explicit IDs may recover older unmarked snapshots; automatic and date-based
+# selection require a repository-side completion marker, including after reinstall.
+if [[ $AT =~ ^[0-9a-f]{8,64}$ ]]; then
+  snapshots=$(backup_restic snapshots --json --host "$SOURCE_HOST")
+  snapshot=$(jq -c --arg id "$AT" '[.[] | select(.id | startswith($id))] | if length == 1 then .[0] else empty end' <<<"$snapshots")
+else
+  snapshots=$(backup_complete_snapshots --host "$SOURCE_HOST")
+  if [[ -n $AT ]]; then
+    at_epoch=$(date -d "$AT" +%s) || { echo 'Invalid backup date.' >&2; exit 2; }
+    snapshot=""
+    while IFS= read -r candidate; do
+      stamp=$(jq -r '.time' <<<"$candidate")
+      if (( $(date -d "$stamp" +%s) <= at_epoch )); then snapshot=$candidate; fi
+    done < <(jq -c 'sort_by(.time) | .[]' <<<"$snapshots")
+  else
+    snapshot=$(jq -c 'sort_by(.time) | last // empty' <<<"$snapshots")
+  fi
+fi
+[[ -n $snapshot ]] || { echo "No complete backup found for $SOURCE_HOST at ${AT:-the latest time}; no backup from before the requested date may exist." >&2; exit 1; }
+[[ $(jq '.paths | length' <<<"$snapshot") == 1 ]] || { echo 'Select an Omarchy home-folder snapshot.' >&2; exit 1; }
+snapshot_id=$(jq -r '.id' <<<"$snapshot")
+source_home=$(jq -r '.paths[0]' <<<"$snapshot")
+[[ $source_home == /* && $source_home != / ]] || { echo 'Invalid home path in backup.' >&2; exit 1; }
+if [[ $TARGET_PATH != /* ]]; then TARGET_PATH="$source_home/$TARGET_PATH"; fi
+TARGET_PATH=$(realpath -m -s -- "$TARGET_PATH")
+[[ $TARGET_PATH == "$source_home" || $TARGET_PATH == "$source_home/"* ]] || { echo 'Choose a path within the backed-up home folder.' >&2; exit 2; }
+
+# Restic include patterns use glob syntax. Escape it so an actual '[' or '*'
+# in a filename cannot select a different set of files.
+include=${TARGET_PATH//\\/\\\\}
+include=${include//\*/\\*}
+include=${include//\?/\\?}
+include=${include//\[/\\[}
+
+mkdir -p "$HOME/Restored"
+staging=$(mktemp -d "$HOME/Restored/$(date '+%Y-%m-%d-%H%M%S').XXXXXX")
+echo "Recovering $SOURCE_HOST:$TARGET_PATH from ${snapshot_id:0:12}..."
+backup_restic restore "$snapshot_id" --target "$staging/files" --include "$include"
+recovered="$staging/files$TARGET_PATH"
+[[ -e $recovered || -L $recovered ]] || { echo 'That path was not present in the snapshot.' >&2; exit 1; }
+
+if [[ $IN_PLACE == true ]]; then
+  relative=${TARGET_PATH#"$source_home"}
+  destination="$HOME$relative"
+  if [[ -z $relative || $destination == "$HOME/Restored" || $destination == "$HOME/Restored/"* ]]; then
+    echo 'Whole-home recovery stays in staging. Copy selected files after reviewing them.' >&2
+    exit 2
+  fi
+  # Refuse symlinked parents: restoring must not write outside this home.
+  probe=$(dirname "$destination")
+  while [[ $probe != "$HOME" ]]; do
+    [[ ! -L $probe ]] || { echo "Refusing symlinked restore parent: $probe" >&2; exit 1; }
+    probe=$(dirname "$probe")
+  done
+  echo "Replace $destination? Its current version will be preserved in $staging/previous."
+  read -rp "Type 'restore' to continue: " confirmation
+  [[ $confirmation == restore ]] || { echo 'Nothing replaced. Recovered files remain in staging.'; exit 1; }
+  mkdir -p "$(dirname "$destination")"
+  if [[ -e $destination || -L $destination ]]; then
+    mv -- "$destination" "$staging/previous"
+  fi
+  if ! mv -- "$recovered" "$destination"; then
+    [[ ! -e $staging/previous && ! -L $staging/previous ]] || mv -- "$staging/previous" "$destination"
+    echo 'Could not apply the restored path. The previous version has been put back when possible.' >&2
+    exit 1
+  fi
+  echo "Restored $destination. Its previous version is in $staging/previous if it existed."
+else
+  echo "Recovered files: $recovered"
+fi

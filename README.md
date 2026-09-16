@@ -4,6 +4,28 @@ Omarchy is a beautiful, fun & agentic Linux distribution by DHH.
 
 Read more at [omarchy.org](https://omarchy.org).
 
+## This fork
+
+This fork tracks upstream Quattro and previews three independent continuity workflows:
+
+| Workflow | Setup | Everyday actions |
+| --- | --- | --- |
+| Reopen supported desktop applications after login | Setup > Session Restore | System > Session |
+| Keep preference history and share settings between computers | Setup > Preferences | System > Preferences |
+| Encrypt and back up home folders, including recovery from another computer | Setup > Backup | System > Backups and the backup bar widget |
+
+Session restore and backups are opt-in. Preference publishing and pulling are explicit; conflicts stop for review, and applying settings keeps a local recovery snapshot. Hardware-specific configuration stays local. These features are independent: sharing preferences does not require setting up cloud backup.
+
+See [desktop sessions](manual/31-dotfiles.md#remembering-your-desktop), [preference sharing](manual/31-dotfiles.md#preference-history-and-sharing), and [backups](manual/52-backups.md) for their behavior and limits. These changes are not yet part of official Omarchy packages. To build an installable preview, use the standard [local-source ISO workflow](https://github.com/omacom/omarchy-iso#creating-the-iso) with this checkout and `omarchy-pkgs`, so both runtime commands and their default assets are installed together.
+
+The backup implementation builds on [Antoine Chevalier's upstream PR #7814](https://github.com/omacom/omarchy/pull/7814), with additional recovery and setup fixes. Session restoration and preference sharing remain separate branches for upstream review. The previous experimental implementations are preserved under `archive/*-20260915`; the integrated branch replaces their combined `omarchy backup sync` interface with `omarchy dots`.
+
+### Updating from the earlier experimental fork
+
+- Rerun **Setup > Session Restore** to enable or disable the new opt-in service. Existing saved application identities remain readable.
+- Run **Setup > Preferences**, then explicitly publish from the computer with the settings you want to share. The previous per-device `profiles/*` branches and `main` are not automatically imported or modified.
+- Configure **Setup > Backup** with a new restic repository or storage prefix. The earlier rclone file copies are not deleted or converted. Keep them until you have verified recovery from the new encrypted backup. An existing rclone provider can be used through restic's `rclone:REMOTE:new-prefix` repository URL, with rclone still installed and configured.
+
 ## The Omarchy Manual
 
 The manual lives in [`manual/`](manual/), which is its authoritative source. It's
@@ -73,6 +95,7 @@ its screenshots are also hosted.
 - [Omarchy on...](manual/49-omarchy-on.md)
 - [Dual Boot Install](manual/50-dual-boot-install.md)
 - [Unattended Installs](manual/51-unattended-installs.md)
+- [Backups](manual/52-backups.md)
 
 ## License
 
