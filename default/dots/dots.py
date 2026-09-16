@@ -99,7 +99,7 @@ def check_manager():
       safe_path(str(path.relative_to(HOME)))
 
 
-def tree(commit):
+def tree(commit, profile=False):
   if not commit:
     return {}
   result = {}
@@ -109,12 +109,104 @@ def tree(commit):
     meta, name = entry.split(b'\t', 1)
     mode, kind, oid = meta.decode().split()
     path = name.decode()
-    tier(path)
+    if profile:
+      try:
+        if tier(path) != 'shared':
+          continue
+      except Error:
+        continue
+    else:
+      tier(path)
     if kind != 'blob' or mode not in {'100644', '100755'}:
       raise Error(f'Unsupported preference type: {path}')
     result[path] = [mode, oid]
   return result
 
+
+
+def profile_mode():
+  return output('config', '--get', 'omarchy.profileBranches', check=False) == 'true'
+
+
+def shared_tree(oid):
+  return tree(oid, profile=profile_mode())
+
+
+def profile_name(device=None):
+  device = device or output('config', '--get', 'omarchy.device', check=False)
+  if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', device):
+    raise Error('Use a device name containing letters, numbers, dots, underscores, or hyphens.')
+  return 'profiles/' + device
+
+
+def fetch_profile(name):
+  if not output('ls-remote', '--heads', 'origin', 'refs/heads/' + name):
+    return None
+  target = 'refs/remotes/origin/' + name
+  git('fetch', '--quiet', '--no-tags', 'origin', '+refs/heads/' + name + ':' + target)
+  return ref(target)
+
+
+def profile_commit(base, files, parents, label):
+  # Preserve legacy files and gitlinks without checking them out or applying
+  # them to this machine. Only audited shared paths are replaced or deleted.
+  with tempfile.TemporaryDirectory(dir=STATE) as work:
+    index = {'GIT_INDEX_FILE': str(Path(work) / 'index')}
+    git('read-tree', base, extra=index)
+    removed = shared_tree(base).keys() - files.keys()
+    entries = b''.join(('0 ' + '0' * 40 + '\t' + name + '\0').encode() for name in sorted(removed))
+    entries += b''.join(f'{mode} {oid}\t{name}\0'.encode() for name, (mode, oid) in sorted(files.items()))
+    git('update-index', '-z', '--index-info', data=entries, extra=index)
+    args = ['commit-tree', output('write-tree', extra=index)]
+    for parent in dict.fromkeys(parents):
+      args += ['-p', parent]
+    return output(*args, data=(label + '\n').encode())
+
+
+def publish_profile(args, remote, current):
+  name = profile_name()
+  previous = fetch_profile(name)
+  before = shared_tree(previous or remote)
+  show_changes(before, current)
+  if current == before and previous and git('merge-base', '--is-ancestor', remote, previous, check=False).returncode == 0:
+    print('The device profile is current. Use Merge Profile to share it.')
+    return
+  confirm('Publish these preferences to ' + name + '? Shared main is unchanged until merge.', args.yes)
+  snapshot('Before publishing device profile')
+  parents = [previous, remote] if previous else [remote]
+  oid = profile_commit(previous or remote, current, parents, 'Update profile from ' + name.removeprefix('profiles/'))
+  git('update-ref', 'refs/omarchy/publish', oid)
+  git('push', '--quiet', 'origin', 'refs/omarchy/publish:refs/heads/' + name)
+  print('Published ' + name + '. Use System > Preferences > Merge Profile to update shared main.')
+
+
+def merge_profile(args):
+  require_idle()
+  if not profile_mode():
+    raise Error('Merge Profile is only used with setup --profile-branches.')
+  remote = fetch()
+  if not remote:
+    raise Error('Legacy compatibility requires an existing shared main branch.')
+  name = profile_name(args.device)
+  selected = fetch_profile(name)
+  if not selected:
+    raise Error('Publish ' + name + ' before merging it.')
+  ancestor = output('merge-base', remote, selected, check=False)
+  if not ancestor:
+    raise Error('The device profile has no common history with main; nothing was changed.')
+  proposed, conflicts = merge_files(shared_tree(ancestor), shared_tree(remote), shared_tree(selected))
+  if conflicts:
+    raise Error('Profile conflicts with main: ' + ', '.join(conflicts) +
+                '. On that device, Apply Settings, resolve the conflicts, and publish again before merging.')
+  show_changes(shared_tree(remote), proposed)
+  if proposed == shared_tree(remote):
+    print('Shared main already contains these preferences.')
+    return
+  confirm('Merge ' + name + ' into shared main?', args.yes)
+  oid = profile_commit(remote, proposed, [remote, selected], 'Merge shared preferences from ' + name)
+  git('update-ref', 'refs/omarchy/publish', oid)
+  git('push', '--quiet', 'origin', 'refs/omarchy/publish:refs/heads/main')
+  print('Shared main updated. Use Apply Settings on each computer, including this one.')
 
 def scan(shared=False):
   check_manager()
@@ -197,6 +289,15 @@ def setup(args):
     DATA.mkdir(parents=True, exist_ok=True)
     git('init', '--bare', '--initial-branch=history', '--template=', str(REPO))
     REPO.chmod(0o700)
+  if args.profile_branches:
+    require_idle()
+    if ref(BASE) and not profile_mode():
+      raise Error('This history already uses the sync branch; use a separate profile for legacy compatibility.')
+    git('config', 'omarchy.profileBranches', 'true')
+    git('config', 'omarchy.device', args.device or os.uname().nodename)
+    profile_name()
+  elif args.device:
+    raise Error('--device requires --profile-branches.')
   snapshot('Start preference history')
   url = args.repo
   if not url and sys.stdin.isatty():
@@ -232,7 +333,7 @@ def setup(args):
         raise Error('Could not verify a private GitHub repository. Sign in with gh auth login and choose a private repository.')
     git('ls-remote', '--heads', '--', url)
     git('config', 'remote.origin.url', url)
-    git('config', 'remote.origin.fetch', '+refs/heads/sync:refs/remotes/origin/sync')
+    git('config', 'remote.origin.fetch', '+refs/heads/' + ('main' if profile_mode() else 'sync') + ':' + REMOTE)
   print('Preference history is ready. Use System > Preferences to save, review, publish, or apply settings.')
   if url:
     print('On another computer, use the same repository, then Apply Settings. Only the audited shared files travel.')
@@ -241,12 +342,13 @@ def setup(args):
 def fetch():
   if not output('config', '--get', 'remote.origin.url', check=False):
     raise Error('No shared repository. Choose Setup > Preferences or run omarchy dots setup --repo <ssh-url>.')
-  heads = output('ls-remote', '--heads', 'origin', 'refs/heads/sync')
+  branch = 'main' if profile_mode() else 'sync'
+  heads = output('ls-remote', '--heads', 'origin', 'refs/heads/' + branch)
   if not heads:
     return None
-  git('fetch', '--quiet', '--no-tags', 'origin', '+refs/heads/sync:' + REMOTE)
+  git('fetch', '--quiet', '--no-tags', 'origin', '+refs/heads/' + branch + ':' + REMOTE)
   remote = ref(REMOTE)
-  files = tree(remote)
+  files = shared_tree(remote)
   if any(tier(name) != 'shared' for name in files):
     raise Error('The remote contains machine-local preferences; nothing has been applied.')
   return remote
@@ -278,6 +380,10 @@ def push(args):
   if remote != ref(BASE):
     raise Error('Shared settings changed. Apply Settings (omarchy dots pull) before publishing.')
   current = scan(shared=True)
+  if profile_mode():
+    if not remote:
+      raise Error('Legacy compatibility requires an existing shared main branch.')
+    return publish_profile(args, remote, current)
   before = tree(remote)
   show_changes(before, current)
   if current == before:
@@ -326,7 +432,7 @@ def pull(args):
   if not remote:
     raise Error('Nothing has been published yet. Publish from the computer whose preferences you want to share.')
   before = scan(shared=True)
-  proposed, conflicts = merge_files(tree(ref(BASE)), before, tree(remote))
+  proposed, conflicts = merge_files(shared_tree(ref(BASE)), before, shared_tree(remote))
   show_changes(before, proposed)
   for name in conflicts:
     print('Conflict: ' + name)
@@ -410,7 +516,7 @@ def resolve(args):
   name = args.file or choose('Resolve which preference?', conflicts)
   if name not in conflicts:
     raise Error('That file is not an unresolved conflict.')
-  ours, theirs = pending['before'].get(name), tree(pending['remote']).get(name)
+  ours, theirs = pending['before'].get(name), shared_tree(pending['remote']).get(name)
   show_changes({name: ours} if ours else {}, {name: theirs} if theirs else {})
   side = args.take or choose('Choose the version to keep for ' + name, ['This machine', 'Shared version'])
   entry = ours if side in {'ours', 'This machine'} else theirs
@@ -476,6 +582,8 @@ def main():
   parser = argparse.ArgumentParser(description='Local preference history and explicit cross-machine sharing.')
   sub = parser.add_subparsers(dest='action', required=True)
   setup_parser = sub.add_parser('setup', help='Set up local history and optional sharing')
+  setup_parser.add_argument('--profile-branches', action='store_true', help='Use an existing main / profiles/<device> repository')
+  setup_parser.add_argument('--device', help='Legacy device branch name (defaults to hostname)')
   setup_parser.add_argument('--repo', help='Private SSH Git repository (or local bare repository)')
   snap = sub.add_parser('snapshot', help='Save preferences locally')
   snap.add_argument('label', nargs='?', default='Saved preferences')
@@ -491,6 +599,9 @@ def main():
     if action == 'restore':
       cmd.add_argument('file', nargs='?')
       cmd.add_argument('--at', help='Local history revision')
+  merge = sub.add_parser('merge', help='Merge an audited legacy device profile into shared main')
+  merge.add_argument('device', nargs='?', help='Device name; defaults to this machine')
+  merge.add_argument('--yes', action='store_true', help='Skip confirmation')
   resolution = sub.add_parser('resolve', help='Choose a side for a pending conflict')
   resolution.add_argument('file', nargs='?')
   resolution.add_argument('--take', choices=['ours', 'theirs'])
@@ -517,6 +628,7 @@ def main():
     elif args.action == 'status':
       print('History: ' + (ref(HISTORY) or 'empty'))
       print('Sharing: ' + (output('config', '--get', 'remote.origin.url', check=False) or 'local only'))
+      print('Workflow: ' + ('main / ' + profile_name() if profile_mode() else 'sync'))
       print('Published/applied: ' + (ref(BASE) or 'never'))
       if PENDING.exists():
         pending = load_pending()
@@ -527,7 +639,7 @@ def main():
     elif args.action == 'continue':
       apply_pending()
     else:
-      {'push': push, 'pull': pull, 'restore': restore, 'resolve': resolve, 'abort': abort}[args.action](args)
+      {'push': push, 'merge': merge_profile, 'pull': pull, 'restore': restore, 'resolve': resolve, 'abort': abort}[args.action](args)
 
 
 if __name__ == '__main__':

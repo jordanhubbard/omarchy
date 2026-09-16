@@ -55,6 +55,7 @@
   "system.dots.history": {"icon":"󰋚","label":"Local History","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-dots log'"},
   "system.dots.push": {"icon":"󰕒","label":"Publish Settings","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-dots push'"},
   "system.dots.pull": {"icon":"󰇚","label":"Apply Settings","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-dots pull'"},
+  "system.dots.merge": {"icon":"󰘬","label":"Merge Profile","description":"Merge this device into shared main","when":"[[ $(git --git-dir=\"${XDG_DATA_HOME:-$HOME/.local/share}/omarchy/dots.git\" config --get omarchy.profileBranches 2>/dev/null) == true ]]","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-dots merge'"},
   "system.dots.restore": {"icon":"󰁯","label":"Restore a File","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-dots restore'"},
   "system.dots.resolve": {"icon":"󰦒","label":"Resolve Conflicts","when":"[[ -f ${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/dots/pending.json ]]","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-dots resolve'"},
   "system.dots.continue": {"icon":"󰄬","label":"Continue Update","when":"[[ -f ${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/dots/pending.json ]]","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-dots continue'"},

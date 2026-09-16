@@ -26,3 +26,13 @@ Individual file replacement uses a sibling temporary file, fsync, and rename. Mu
 Setup > Preferences creates local history and optionally connects to an existing private SSH repository or creates a private GitHub repository through `gh`. GitHub privacy is checked; other SSH servers remain the user's responsibility. System > Preferences exposes snapshot, history, diff, publish, apply, restore, and pending-update recovery. Nothing publishes automatically.
 
 `test/shell.d/dots-test.sh` uses real local bare Git repositories and isolated homes. It covers two-machine round trips, deletions, non-overlapping edits, persistent conflict resolution, recovery snapshots, edits made during review, stale push refusal, interrupted apply/cancel, symlink dormancy, unlisted remote paths, global Git isolation, and separation of local history from published history. Graphical verification belongs in a disposable Omarchy VM.
+
+## Existing profile repositories (fork compatibility)
+
+`omarchy dots setup --repo <ssh-url> --profile-branches [--device <name>]` opts into the earlier `main` / `profiles/<device>` workflow. This compatibility mode is confined to the fork; the independent upstream preference proposal retains the simpler `sync` protocol.
+
+Apply Settings reads shared `main` through the audited manifest. Machine-local paths, extra legacy files, and plugin gitlinks are neither installed nor deleted. Publish Settings writes the current shared preferences to the device branch; it preserves that branch's other entries without checking them out. Merge Profile merges the audited shared changes into `main`, preserving all other entries on `main`. It uses a normal non-forced push; a concurrent update cannot be overwritten. `omarchy dots merge <device>` can select another device explicitly.
+
+If device branches conflict, merge leaves both branches unchanged. On the affected device, apply main, resolve the persistent local conflict, publish again, and retry merge. Publication records the applied main as a parent even if conflict resolution retained the same local bytes, so a resolved disagreement does not recur on every merge. After merging, apply main on every machine, including the publisher.
+
+Existing history that has already used the `sync` protocol cannot be silently switched into this mode. Setup validates device names. The additional tests use real repositories with extra legacy files and machine-local configuration, covering publish-before-merge, deletion, conflicting device branches, and stale publication.

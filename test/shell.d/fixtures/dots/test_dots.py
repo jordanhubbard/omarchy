@@ -187,4 +187,78 @@ class DotsTest(unittest.TestCase):
     self.assertFalse(path.exists())
 
 
+  def legacy_seed(self):
+    work = self.root / 'legacy-source'
+    work.mkdir()
+    def git(*args):
+      return subprocess.check_output(['git', '-C', str(work), *args], text=True).strip()
+    git('init', '-q', '-b', 'main')
+    git('config', 'user.name', 'Fixture')
+    git('config', 'user.email', 'fixture@example.invalid')
+    (work / '.bashrc').write_text('color=blue\nsize=10\n')
+    (work / '.config/hypr').mkdir(parents=True)
+    (work / '.config/hypr/monitors.lua').write_text('other-machine-only\n')
+    (work / 'unlisted.txt').write_text('preserve legacy data\n')
+    git('add', '.')
+    git('commit', '-qm', 'Existing profile')
+    git('push', '-q', str(self.remote), 'main')
+    for host in ('a', 'b'):
+      self.run_dots(host, 'setup', '--repo', str(self.remote), '--profile-branches', '--device', host)
+      self.run_dots(host, 'pull', '--yes')
+    return git
+
+  def remote_git(self, *args):
+    return subprocess.check_output(['git', '--git-dir', str(self.remote), *args], text=True).strip()
+
+  def test_legacy_publish_merge_and_pull_preserve_other_paths(self):
+    self.legacy_seed()
+    original = self.remote_git('rev-parse', 'main')
+    self.file('a').write_text('color=red\nsize=10\n')
+    self.run_dots('a', 'push', '--yes')
+    self.assertEqual(self.remote_git('rev-parse', 'main'), original)
+    self.assertIn('color=red', self.remote_git('show', 'profiles/a:.bashrc'))
+    self.run_dots('a', 'merge', '--yes')
+    self.run_dots('b', 'pull', '--yes')
+    self.assertEqual(self.file('b').read_text(), self.file('a').read_text())
+    self.assertEqual(self.remote_git('show', 'main:unlisted.txt'), 'preserve legacy data')
+    self.assertEqual(self.remote_git('show', 'main:.config/hypr/monitors.lua'), 'other-machine-only')
+    self.assertEqual(self.file('b', '.config/hypr/monitors.lua').read_text(), 'monitor=b\n')
+    self.assertFalse(self.file('b', 'unlisted.txt').exists())
+
+  def test_legacy_profile_deletion_is_merged_and_applied(self):
+    self.legacy_seed()
+    self.file('a').unlink()
+    self.run_dots('a', 'push', '--yes')
+    self.run_dots('a', 'merge', '--yes')
+    self.run_dots('b', 'pull', '--yes')
+    self.assertFalse(self.file('b').exists())
+    self.assertEqual(self.remote_git('show', 'main:unlisted.txt'), 'preserve legacy data')
+
+  def test_legacy_conflicting_profiles_refuse_merge_without_losing_edits(self):
+    self.legacy_seed()
+    self.file('a').write_text('color=red\nsize=10\n')
+    self.file('b').write_text('color=green\nsize=10\n')
+    self.run_dots('a', 'push', '--yes')
+    self.run_dots('b', 'push', '--yes')
+    self.run_dots('a', 'merge', '--yes')
+    main = self.remote_git('rev-parse', 'main')
+    self.run_dots('b', 'merge', '--yes', ok=False)
+    self.assertEqual(self.remote_git('rev-parse', 'main'), main)
+    self.assertIn('color=green', self.remote_git('show', 'profiles/b:.bashrc'))
+    self.run_dots('b', 'pull', '--yes')
+    self.run_dots('b', 'resolve', '.bashrc', '--take', 'ours')
+    self.run_dots('b', 'continue')
+    self.run_dots('b', 'push', '--yes')
+    self.run_dots('b', 'merge', '--yes')
+    self.assertIn('color=green', self.remote_git('show', 'main:.bashrc'))
+
+  def test_legacy_publish_requires_applying_changed_main(self):
+    self.legacy_seed()
+    self.file('a').write_text('color=red\nsize=10\n')
+    self.run_dots('a', 'push', '--yes')
+    self.run_dots('a', 'merge', '--yes')
+    result = self.run_dots('b', 'push', '--yes', ok=False)
+    self.assertIn('Apply Settings', result.stderr)
+
+
 unittest.main()

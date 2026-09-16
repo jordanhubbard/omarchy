@@ -104,3 +104,11 @@ The shared list is deliberately small: `.bashrc`, `.XCompose`, keybindings, look
 Only those audited files can be tracked. Review their contents before publishing: a shell configuration can still contain a token or a machine-specific path you put there. Use a private repository. Published preferences have their own history; your automatic recovery snapshots never leave this computer. Local file permissions are restricted when applying shared preferences.
 
 For terminal use: `omarchy dots snapshot`, `log`, `diff`, `push`, `pull`, and `status`. `omarchy dots restore .bashrc --at <snapshot>` restores a version from Local History. Resolve with `omarchy dots resolve <file> --take ours` or `--take theirs`, then `omarchy dots continue`. `omarchy dots abort` cancels a pending update. `--yes` on push, pull, or restore skips its confirmation for scripts.
+
+### Connecting an earlier shared profile repository
+
+If your computers already use a shared `main` branch and `profiles/<computer>` branches, connect with `omarchy dots setup --repo <your-SSH-Git-URL> --profile-branches`. The computer's hostname names its device branch; add `--device <name>` to choose another name.
+
+Use **System > Preferences > Apply Settings** to receive the shared preferences. **Publish Settings** updates this computer's profile. **Merge Profile** then makes its portable changes available in shared `main`; apply settings again on each computer. Only the audited portable files travel. Existing hardware settings and other legacy repository files are retained, and plugin repositories are not automatically installed.
+
+If a merge reports conflicting profiles, apply shared settings on that computer, choose the desired version in **Resolve Conflicts**, continue the update, and publish again before merging. The previous local settings remain available in **Local History** and **Restore a File**.
