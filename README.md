@@ -20,6 +20,14 @@ See [desktop sessions](manual/31-dotfiles.md#remembering-your-desktop), [prefere
 
 The backup implementation builds on [Antoine Chevalier's upstream PR #7814](https://github.com/omacom/omarchy/pull/7814), with additional recovery and setup fixes. Session restoration and preference sharing remain separate branches for upstream review. The previous experimental implementations are preserved under `archive/*-20260915`; the integrated branch replaces their combined `omarchy backup sync` interface with `omarchy dots`.
 
+### Upstream review and verification
+
+- [Opt-in session restore — PR #10353](https://github.com/omacom/omarchy/pull/10353)
+- [Preference history and sharing — PR #12037](https://github.com/omacom/omarchy/pull/12037), with a [focused conflict-handling discussion](https://github.com/omacom/omarchy/discussions/12038)
+- [Recovery/setup fixes for the existing backup proposal](https://github.com/achevalier-dev/omarchy/pull/1)
+
+See the [verification report](docs/continuity-review.md) and [inspected screenshots](https://github.com/jordanhubbard/omarchy/tree/review-assets/continuity). The desktop workflows and a real reboot were exercised in a disposable Omarchy VM. Live cloud credentials and a rebuilt release ISO remain outside that verification.
+
 ### Updating from the earlier experimental fork
 
 - Rerun **Setup > Session Restore** to enable or disable the new opt-in service. Existing saved application identities remain readable.
