@@ -173,3 +173,37 @@ pass 'a complete first run enables the backup schedule'
 if setup --repository >/dev/null 2>&1; then fail 'missing repository value must fail before prompting'; fi
 [[ ! -s $test_tmp/calls.log ]] || fail 'invalid arguments must not configure anything'
 pass 'missing setup arguments fail before changing backup configuration'
+
+# Exercise the TTY-only recovery offer with a real repository, including a
+# reinstall that retains its hostname. Gum/systemd remain isolated stubs.
+if command -v restic >/dev/null && command -v script >/dev/null; then
+  export REAL_RESTIC
+  REAL_RESTIC=$(command -v restic)
+  export RESTIC_REPOSITORY="$test_tmp/existing-repo" RESTIC_PASSWORD_FILE="$test_tmp/passphrase"
+  export TEST_RECOVERY_HOST
+  TEST_RECOVERY_HOST=$(hostname)
+  mkdir -p "$test_tmp/old-home"
+  printf 'old machine file\n' > "$test_tmp/old-home/recovered-note"
+  "$REAL_RESTIC" init >/dev/null
+  "$REAL_RESTIC" backup --host "$TEST_RECOVERY_HOST" --tag omarchy,omarchy-complete "$test_tmp/old-home" >/dev/null
+  stub restic <<'STUB'
+#!/bin/bash
+exec "$REAL_RESTIC" "$@"
+STUB
+  stub gum <<'STUB'
+#!/bin/bash
+if [[ $1 == choose ]]; then printf '%s\n' "$TEST_RECOVERY_HOST"; fi
+exit 0
+STUB
+  printf -v setup_command '%q ' env "TEST_LOG=$test_tmp/calls.log" "HOME=$fake_home" \
+    "XDG_STATE_HOME=$fake_home/.local/state" "OMARCHY_PATH=$ROOT" "PATH=$fake_bin:$ROOT/bin:$PATH" \
+    bash "$ROOT/bin/omarchy-setup-backup" --repository "$RESTIC_REPOSITORY" \
+    --passphrase-file "$test_tmp/passphrase" --no-first-backup
+  script -q -e -c "$setup_command" /dev/null </dev/null > "$test_tmp/recovery-output"
+  recovered=$(find "$fake_home/Restored" -name recovered-note -print -quit)
+  [[ -n $recovered && $(cat "$recovered") == 'old machine file' ]] || fail 'setup offers existing same-host snapshots and stages their files'
+  [[ ! -e $fake_home/recovered-note ]] || fail 'setup recovery preserves the current home'
+  pass 'interactive setup finds existing same-host backups and recovers into staging'
+else
+  pass 'restic or script unavailable; skipping real interactive setup recovery'
+fi
