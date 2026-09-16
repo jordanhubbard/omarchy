@@ -34,4 +34,4 @@ A live Omarchy machine subsequently completed an encrypted backup over its exist
 
 An existing private Git repository using `main` and `profiles/<machine>` was connected through the fork-only compatibility mode. Its full history was bundled before changes. Initial conflicts were reviewed, a newer local shell alias was retained, shared terminal/desktop preferences were applied, and the device profile was published and merged into main. Machine-specific settings and other legacy repository entries were preserved.
 
-The expanded preference suite passes 17 real-Git tests. The full Arch run still passes 246 of 248 shell test files, with the same two upstream migration failures noted above. The smaller upstream preference PR remains independent of the legacy compatibility mode.
+The expanded preference suite passes 18 real-Git tests. The full Arch run still passes 246 of 248 shell test files, with the same two upstream migration failures noted above. The smaller upstream preference PR remains independent of the legacy compatibility mode.

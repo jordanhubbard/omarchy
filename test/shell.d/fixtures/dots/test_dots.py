@@ -201,6 +201,8 @@ class DotsTest(unittest.TestCase):
     (work / 'unlisted.txt').write_text('preserve legacy data\n')
     git('add', '.')
     git('commit', '-qm', 'Existing profile')
+    git('update-index', '--add', '--cacheinfo', '160000,' + git('rev-parse', 'HEAD') + ',.config/omarchy/plugins/fixture.plugin')
+    git('commit', '-qm', 'Record existing plugin')
     git('push', '-q', str(self.remote), 'main')
     for host in ('a', 'b'):
       self.run_dots(host, 'setup', '--repo', str(self.remote), '--profile-branches', '--device', host)
@@ -213,6 +215,7 @@ class DotsTest(unittest.TestCase):
   def test_legacy_publish_merge_and_pull_preserve_other_paths(self):
     self.legacy_seed()
     original = self.remote_git('rev-parse', 'main')
+    plugin = self.remote_git('ls-tree', 'main', '.config/omarchy/plugins/fixture.plugin')
     self.file('a').write_text('color=red\nsize=10\n')
     self.run_dots('a', 'push', '--yes')
     self.assertEqual(self.remote_git('rev-parse', 'main'), original)
@@ -224,6 +227,7 @@ class DotsTest(unittest.TestCase):
     self.assertEqual(self.remote_git('show', 'main:.config/hypr/monitors.lua'), 'other-machine-only')
     self.assertEqual(self.file('b', '.config/hypr/monitors.lua').read_text(), 'monitor=b\n')
     self.assertFalse(self.file('b', 'unlisted.txt').exists())
+    self.assertEqual(self.remote_git('ls-tree', 'main', '.config/omarchy/plugins/fixture.plugin'), plugin)
 
   def test_legacy_profile_deletion_is_merged_and_applied(self):
     self.legacy_seed()
@@ -259,6 +263,20 @@ class DotsTest(unittest.TestCase):
     self.run_dots('a', 'merge', '--yes')
     result = self.run_dots('b', 'push', '--yes', ok=False)
     self.assertIn('Apply Settings', result.stderr)
+
+
+  def test_legacy_extra_paths_do_not_allow_symlinked_shared_preferences(self):
+    git = self.legacy_seed()
+    bashrc = self.root / 'legacy-source/.bashrc'
+    bashrc.unlink()
+    bashrc.symlink_to('/etc/passwd')
+    git('add', '.bashrc')
+    git('commit', '-qm', 'Invalid shared object')
+    git('push', '-q', str(self.remote), 'main')
+    before = self.file('a').read_bytes()
+    result = self.run_dots('a', 'pull', '--yes', ok=False)
+    self.assertIn('Unsupported preference type', result.stderr)
+    self.assertEqual(self.file('a').read_bytes(), before)
 
 
 unittest.main()
