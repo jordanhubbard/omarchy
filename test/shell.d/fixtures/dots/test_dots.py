@@ -20,6 +20,7 @@ class DotsTest(unittest.TestCase):
       home.mkdir()
       (home / '.bashrc').write_text('color=blue\nsize=10\n')
       (home / '.config/hypr').mkdir(parents=True)
+      (home / '.config/hypr/input.lua').write_text('keyboard=default\ntouchpad=default\n')
       (home / '.config/hypr/monitors.lua').write_text('monitor=' + host + '\n')
       self.run_dots(host, 'setup', '--repo', str(self.remote))
 
@@ -53,6 +54,20 @@ class DotsTest(unittest.TestCase):
     self.run_dots('b', 'pull', '--yes')
     self.assertEqual(self.file('b').read_text(), self.file('a').read_text())
     self.assertEqual(self.file('b', '.config/hypr/monitors.lua').read_text(), 'monitor=b\n')
+
+  def test_input_device_settings_travel_without_machine_classification(self):
+    self.seed()
+    settings = 'keyboard=caps-control\ntouchpad=natural-scroll\nmouse=flat\n'
+    self.file('a', '.config/hypr/input.lua').write_text(settings)
+    self.run_dots('a', 'push', '--yes')
+    self.run_dots('b', 'pull', '--yes')
+    self.assertEqual(self.file('b', '.config/hypr/input.lua').read_text(), settings)
+    self.assertEqual(self.file('b', '.config/hypr/monitors.lua').read_text(), 'monitor=b\n')
+    settings = settings.replace('touchpad=natural-scroll', 'touchpad=traditional-scroll')
+    self.file('b', '.config/hypr/input.lua').write_text(settings)
+    self.run_dots('b', 'push', '--yes')
+    self.run_dots('a', 'pull', '--yes')
+    self.assertEqual(self.file('a', '.config/hypr/input.lua').read_text(), settings)
 
   def test_deletion_propagates(self):
     self.seed()

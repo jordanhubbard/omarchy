@@ -6,7 +6,7 @@ shared .config/hypr/bindings.lua
 shared .config/hypr/looknfeel.lua
 local .config/hypr/hyprland.lua
 local .config/hypr/monitors.lua
-local .config/hypr/input.lua
+shared .config/hypr/input.lua
 local .config/hypr/autostart.lua
 shared .config/omarchy/shell.json
 shared .config/omarchy/extensions/*.jsonc
