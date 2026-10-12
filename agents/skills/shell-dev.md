@@ -38,6 +38,17 @@ Run `omarchy-restart-shell` after making changes to QML files.
   bar widgets register one target each — `omarchy.indicators`,
   `omarchy.system-update`, `omarchy.clock`. There is no `bar` target.
 
+## Keeping state current without polling
+
+The shell runs all day on battery, and a widget is built once per monitor, so a `Timer` that starts a `Process` costs that process times the number of monitors, every tick, forever. Don't poll for state that only changes through known events. Pick the first of these that fits:
+
+- A native Quickshell service that signals on change: `UPower` and `PowerProfiles` (`Quickshell.Services.UPower`), `Hyprland` and each workspace's `lastIpcObject`, `Pipewire`, `Mpris`, `SystemTray`, `Notifications`.
+- An event stream the shell already runs, such as the Hyprland IPC events or the long-running `pactl subscribe` in `Commons/UntypedInput.qml`. Extend it rather than starting a second one.
+- A file watch: `FileView` with `watchChanges`, or the directory watch in `plugins/bar/Bar.qml`, when the state lives in a file the user can read.
+- A push from the command that changes the state. If only Omarchy commands change it, have them call `omarchy-shell -q <target> refresh` after the change, the way `omarchy-reminder` and `omarchy-sudo-passwordless` do. When the change happens later, without a command running (an expiry, say), schedule the refresh with a transient `systemd-run --user --on-active=…` timer. A root-owned timer cannot reach the user's shell.
+
+Polling is the last resort, kept for state with no change signal at all (a remote API, say). Then gate the timer on the panel being open where you can, pick the longest interval the UI can tolerate, and put the poll in one shared service rather than in a per-monitor widget. Never poll a privileged probe: every `sudo -n` can write to the auth log.
+
 ## Editing widget files with glyphs
 
 Widget files in `shell/plugins/bar/widgets/` contain Nerd Font glyphs as raw
@@ -45,3 +56,7 @@ unicode characters. Agent file-editing tools can strip multi-byte codepoints
 in some positions — do **not** rewrite widget files wholesale through those
 tools. For glyph fixes, make a targeted edit with the surrounding context, or
 use a Python script that inserts codepoints via `chr(0xXXXXX)`.
+
+## Palette references
+
+Import `qs.Commons as Commons` and use `Commons.Color` for the palette singleton, including `Connections.target`. Qt 6.12 introduces a `Color` type in `QtQuick` that shadows unqualified palette references. This applies to first-party components and third-party plugin QML alike. Keep the unqualified `qs.Commons` import when the file also uses `Style`, `Util`, or `Border`.
