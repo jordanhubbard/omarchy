@@ -191,6 +191,11 @@ Panel {
   // ---- Location editing. Clicking the location label swaps it for a search
   //      field; picking a geocoded suggestion persists name + coordinates to
   //      the module's shell.json entry. An empty commit returns to auto.
+  // The search field lives in the panel's lazily built content.
+  function locationInput() {
+    return panel.loadedContent ? panel.loadedContent.locationField : null
+  }
+
   function startEditingLocation() {
     editingLocation = true
     savingLocation = false
@@ -198,6 +203,8 @@ Panel {
     locationSuggestions = []
     suggestionIndex = 0
     Qt.callLater(function() {
+      var locationField = root.locationInput()
+      if (!locationField) return
       locationField.text = root.configuredLocation
       locationField.selectAll()
       locationField.forceActiveFocus()
@@ -210,10 +217,12 @@ Panel {
     savingLocationQueryStarted = false
     locationSuggestions = []
     geocodeDebounce.stop()
-    Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
+    Qt.callLater(function() { if (panel.loadedContent) panel.loadedContent.forceActiveFocus() })
   }
 
   function commitLocation() {
+    var locationField = root.locationInput()
+    if (!locationField) return
     var location = Model.locationCommit(locationField.text, locationSuggestions, suggestionIndex)
     if (location.name === "") {
       clearLocation()
@@ -264,7 +273,8 @@ Panel {
   // Debounced geocoding. Only one curl runs at a time; if the query moved on
   // while a fetch was in flight, the latest query is fetched right after.
   function requestGeocode() {
-    var query = locationField.text.trim()
+    var locationField = root.locationInput()
+    var query = locationField ? locationField.text.trim() : ""
     if (query.length < 2) {
       locationSuggestions = []
       return
@@ -494,12 +504,14 @@ Panel {
     bar: root.bar
     open: root.opened
     centerOnBar: true
-    focusTarget: keyCatcher
+    focusTarget: panel.loadedContent
     contentWidth: panel.fittedContentWidth(Style.space(480))
-    contentHeight: panel.fittedContentHeight(weatherColumn.implicitHeight)
+    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight)
 
-    PanelKeyCatcher {
+    content: PanelKeyCatcher {
       id: keyCatcher
+      property alias locationField: locationField
+      implicitHeight: weatherColumn.implicitHeight
       anchors.fill: parent
       blocked: root.editingLocation
       onReturnRequested: root.startEditingLocation()

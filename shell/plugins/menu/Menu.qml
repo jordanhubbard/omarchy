@@ -52,6 +52,11 @@ Item {
   property string userMenuPath: Quickshell.env("HOME") + "/.config/omarchy/extensions/omarchy-menu.jsonc"
   property var defaultMenuItems: []
   property var userMenuItems: []
+  // Whether each file has answered once, loaded or (the user's) missing. At
+  // startup both arrive separately, and evaluating guards for the first alone
+  // would run the whole batch twice; an open before then evaluates anyway.
+  property bool defaultMenuSettled: false
+  property bool userMenuSettled: false
   property bool opened: false
   property string mode: "menu"
   readonly property bool dmenuActive: mode === "select" || mode === "input"
@@ -261,7 +266,7 @@ Item {
     root.items = mergedMenu.items
     root.itemOrder = mergedMenu.itemOrder
     root.rowsLoaded = true
-    root.evaluateGuards()
+    if (root.defaultMenuSettled && root.userMenuSettled) root.evaluateGuards()
     if (root.opened) {
       root.rebuildDisplay()
       if (!root.dmenuActive) {
@@ -1080,7 +1085,9 @@ Item {
     path: root.defaultMenuPath
     watchChanges: true
     printErrors: false
-    onLoaded: { root.defaultMenuItems = root.parseMenuJsonc(text()); root.rebuildItemsFromSources() }
+    onLoaded: { root.defaultMenuItems = root.parseMenuJsonc(text()); root.defaultMenuSettled = true; root.rebuildItemsFromSources() }
+    // A user file that loaded first held its evaluation for this one.
+    onLoadFailed: { root.defaultMenuSettled = true; if (root.userMenuSettled) root.evaluateGuards() }
     onFileChanged: reload()
   }
 
@@ -1089,8 +1096,8 @@ Item {
     path: root.userMenuPath
     watchChanges: true
     printErrors: false
-    onLoaded: { root.userMenuItems = root.parseMenuJsonc(text()); root.rebuildItemsFromSources() }
-    onLoadFailed: { root.userMenuItems = []; root.rebuildItemsFromSources() }
+    onLoaded: { root.userMenuItems = root.parseMenuJsonc(text()); root.userMenuSettled = true; root.rebuildItemsFromSources() }
+    onLoadFailed: { root.userMenuItems = []; root.userMenuSettled = true; root.rebuildItemsFromSources() }
     onFileChanged: reload()
   }
 

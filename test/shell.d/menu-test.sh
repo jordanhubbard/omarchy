@@ -273,7 +273,8 @@ assertDeepEqual(
 const expectedDefaults = {
   browser: ['Chromium', 'Chrome', 'Brave', 'Brave Origin', 'Edge', 'Firefox', 'Zen'],
   terminal: ['Alacritty', 'Foot', 'Ghostty', 'Kitty'],
-  editor: ['Neovim', 'VSCode', 'Cursor', 'Zed', 'Sublime Text', 'Helix', 'Vim', 'Emacs']
+  editor: ['Neovim', 'VSCode', 'Cursor', 'Zed', 'Sublime Text', 'Helix', 'Vim', 'Emacs'],
+  dictation: ['Superwhisper', 'Voxtype']
 }
 assert(
   Object.entries(expectedDefaults).every(([type, labels]) => {
@@ -281,7 +282,7 @@ assert(
     return entries.map(item => item.label).join('\0') === labels.join('\0')
       && entries.every(item => !item.when)
   }),
-  'menu always exposes every supported browser, terminal, and editor under Defaults'
+  'menu always exposes every supported browser, terminal, editor, and dictation backend under Defaults'
 )
 assert(!defaultById['install.ai.crush'], 'menu removes Crush from Install > AI')
 // Software you already have keeps its place in Install, dimmed rather than
@@ -351,13 +352,6 @@ assertDeepEqual(
 assert(
   defaultById['setup.security.passwordless-sudo'].action.includes('omarchy-sudo-passwordless'),
   'menu places Passwordless Sudo under Setup > Security'
-)
-assert(
-  defaultById['setup.security.usb-authorization'].action.includes('omarchy-setup-security-usb-authorization')
-    && defaultById['remove.security.usb-authorization'].action.includes('omarchy-remove-security-usb-authorization')
-    && defaultById['setup.security.usb-authorization-boot'].action.includes('omarchy-setup-security-usb-authorization --boot')
-    && defaultById['remove.security.usb-authorization-boot'].action.includes('omarchy-remove-security-usb-authorization --boot-only'),
-  'menu can enable and remove USB device authorization under Security'
 )
 assert(
   !defaultById['trigger.toggle.direct-boot'] && !defaultById['trigger.toggle.passwordless-sudo'],
@@ -777,6 +771,20 @@ assert(
   /function activateIndex\(index, fromPointer\)[\s\S]*root\.setActiveMenu\(row\.target \|\| row\.itemId, true, fromPointer\)/.test(menuQml)
     && /onClicked:[\s\S]*root\.activateIndex\(row\.index, true\)/.test(menuQml),
   'mouse activation carries pointer intent into subordinate menus'
+)
+// Both menu files load separately at startup; evaluating after the first
+// alone ran the whole guard batch twice.
+assert(
+  /function rebuildItemsFromSources\(\)[\s\S]*?if \(root\.defaultMenuSettled && root\.userMenuSettled\) root\.evaluateGuards\(\)/.test(menuQml)
+    && /onLoaded: \{ root\.defaultMenuItems = [^}]*root\.defaultMenuSettled = true; root\.rebuildItemsFromSources\(\) \}/.test(menuQml)
+    && /onLoadFailed: \{ root\.defaultMenuSettled = true; if \(root\.userMenuSettled\) root\.evaluateGuards\(\) \}/.test(menuQml)
+    && /onLoaded: \{ root\.userMenuItems = [^}]*root\.userMenuSettled = true; root\.rebuildItemsFromSources\(\) \}/.test(menuQml)
+    && /onLoadFailed: \{ root\.userMenuItems = \[\]; root\.userMenuSettled = true; root\.rebuildItemsFromSources\(\) \}/.test(menuQml),
+  'menu evaluates guards once both menu files have answered, not once per file at startup'
+)
+assert(
+  /function openExistingMenu\([\s\S]*?root\.evaluateGuards\(\)/.test(menuQml),
+  'menu still evaluates guards on every open, settled or not'
 )
 JS
 

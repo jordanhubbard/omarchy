@@ -174,6 +174,10 @@ Panel {
   function startEditingLife() {
     root.editingLife = true
     Qt.callLater(function() {
+      var content = panel.loadedContent
+      if (!content) return
+      var bornField = content.bornField
+      var expectancyField = content.expectancyField
       bornField.text = root.birthYear > 0 ? String(root.birthYear) : ""
       expectancyField.text = String(root.lifeExpectancy)
       bornField.selectAll()
@@ -183,7 +187,7 @@ Panel {
 
   function cancelEditingLife() {
     root.editingLife = false
-    Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
+    Qt.callLater(function() { if (panel.loadedContent) panel.loadedContent.forceActiveFocus() })
   }
 
   // Shared by both fields: Tab hops to the other one, Enter commits the pair,
@@ -211,6 +215,10 @@ Panel {
   }
 
   function commitLife() {
+    var content = panel.loadedContent
+    if (!content) return
+    var bornField = content.bornField
+    var expectancyField = content.expectancyField
     var born = Model.parseBirthYear(bornField.text, today.getFullYear())
     var span = Model.parseLifeExpectancy(expectancyField.text)
     if (born !== root.birthYear || span !== root.lifeExpectancy)
@@ -245,12 +253,15 @@ Panel {
     bar: root.bar
     open: root.opened
     centerOnBar: true
-    focusTarget: keyCatcher
+    focusTarget: panel.loadedContent
     contentWidth: panel.fittedContentWidth(Style.space(560))
-    contentHeight: panel.fittedContentHeight(calendarColumn.implicitHeight)
+    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight)
 
-    PanelKeyCatcher {
+    content: PanelKeyCatcher {
       id: keyCatcher
+      property alias bornField: bornField
+      property alias expectancyField: expectancyField
+      implicitHeight: calendarColumn.implicitHeight
       anchors.fill: parent
       blocked: root.editingLife
       onMoveRequested: function(dx, dy) {

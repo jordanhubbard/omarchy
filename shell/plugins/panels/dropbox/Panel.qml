@@ -14,6 +14,12 @@ Panel {
   ipcTarget: "omarchy.dropbox"
   manageIpc: false
 
+  // Items inside the panel's lazily built content, null until it first
+  // opens. Code inside the content reaches its own ids directly.
+  readonly property Item panelFlick: panel.loadedContent ? panel.loadedContent.panelFlick : null
+  readonly property Item hero: panel.loadedContent ? panel.loadedContent.hero : null
+  readonly property Item fileColumn: panel.loadedContent ? panel.loadedContent.fileColumn : null
+
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property string focusSection: "login"
   property int fileIndex: 0
@@ -140,7 +146,7 @@ Panel {
     cursorActive = false
     if (panelFlick) panelFlick.contentY = 0
     dropbox.refresh()
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+    Qt.callLater(function() { if (panel.loadedContent) panel.loadedContent.forceActiveFocus() })
   }
   onFileIndexChanged: scrollCursorIntoView()
 
@@ -197,12 +203,16 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
-    focusTarget: keyCatcher
+    focusTarget: panel.loadedContent
     contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(560))
+    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(560))
 
-    PanelKeyCatcher {
+    content: PanelKeyCatcher {
       id: keyCatcher
+      property alias panelFlick: panelFlick
+      property alias hero: hero
+      property alias fileColumn: fileColumn
+      implicitHeight: column.implicitHeight
       anchors.fill: parent
       onMoveRequested: function(dx, dy) {
         if (!root.cursorActive) { root.cursorActive = true; return }

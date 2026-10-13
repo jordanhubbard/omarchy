@@ -12,6 +12,13 @@ Panel {
   ipcTarget: "omarchy.agents"
   manageIpc: false
 
+  // Items inside the panel's lazily built content, null until it first
+  // opens. Code inside the content reaches its own ids directly.
+  readonly property Item panelFlick: panel.loadedContent ? panel.loadedContent.panelFlick : null
+  readonly property Item hero: panel.loadedContent ? panel.loadedContent.hero : null
+  readonly property Item column: panel.loadedContent ? panel.loadedContent.column : null
+  readonly property Item providerSections: panel.loadedContent ? panel.loadedContent.providerSections : null
+
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
@@ -169,6 +176,7 @@ Panel {
   property bool renaming: false
 
   function dragProviderOver(y) {
+    if (!providerSections) return
     for (var i = 0; i < providerSections.count; i++) {
       var item = providerSections.itemAt(i)
       if (item && y >= item.y && y < item.y + item.height) {
@@ -190,7 +198,7 @@ Panel {
 
   // Keeps whatever the cursor lands on inside the scrolled view.
   function revealItem(item) {
-    if (!item || !panelFlick || !panelFlick.interactive) return
+    if (!item || !column || !panelFlick || !panelFlick.interactive) return
     var top = item.mapToItem(column, 0, 0).y
     var margin = Style.space(12)
     if (top - margin < panelFlick.contentY)
@@ -400,7 +408,7 @@ Panel {
 
   // Hands the keyboard back to the panel after an inline edit.
   function focusKeys() {
-    keyCatcher.forceActiveFocus()
+    if (panel.loadedContent) panel.loadedContent.forceActiveFocus()
   }
 
   function accountDetail(account) {
@@ -748,7 +756,7 @@ Panel {
     : "Add " + (/^[AEIOU]/.test(addProviderName(addProvider)) ? "an " : "a ") + addProviderName(addProvider) + " account"
   onAddStageChanged: {
     phraseSwap.stop()
-    hero.metaOpacity = 1.0
+    if (hero) hero.metaOpacity = 1.0
     resetKeys()
   }
 
@@ -774,7 +782,7 @@ Panel {
     nowMs = Date.now()
     if (panelFlick) panelFlick.contentY = 0
     usage.refreshLimits()
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+    Qt.callLater(function() { if (panel.loadedContent) panel.loadedContent.forceActiveFocus() })
   }
 
   Main {
@@ -879,12 +887,17 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
-    focusTarget: keyCatcher
+    focusTarget: panel.loadedContent
     contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(860))
+    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(860))
 
-    PanelKeyCatcher {
+    content: PanelKeyCatcher {
       id: keyCatcher
+      property alias panelFlick: panelFlick
+      property alias hero: hero
+      property alias column: column
+      property alias providerSections: providerSections
+      implicitHeight: column.implicitHeight
       anchors.fill: parent
       reorderable: root.addStage === "" && !root.renaming
       onReorderRequested: function(dy) { root.reorderProvider(dy) }
@@ -1293,7 +1306,7 @@ Panel {
             root.dragTarget = section.providerIndex
           }
           onPositionChanged: function(mouse) {
-            if (pressed) root.dragProviderOver(mapToItem(column, mouse.x, mouse.y).y)
+            if (pressed) root.dragProviderOver(mapToItem(root.column, mouse.x, mouse.y).y)
           }
           onReleased: root.dropProvider()
           onCanceled: { root.dragProviderId = ""; root.dragTarget = -1 }
