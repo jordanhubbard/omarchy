@@ -79,6 +79,12 @@ if ! machine=$(uname -m) || [[ -z $machine ]]; then
   exit 1
 fi
 
+# BSD uname uses arm64/amd64 for these same CPU architectures.
+case $machine in
+  arm64) machine=aarch64 ;;
+  amd64) machine=x86_64 ;;
+esac
+
 # A booted system is one systemd runs as PID 1 from this root. An image build
 # is told apart by what it shows: no /run/systemd/system (a root with a /run of
 # its own), PID 1's root being another (a chroot on the build host, even with

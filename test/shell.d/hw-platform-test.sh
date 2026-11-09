@@ -143,6 +143,9 @@ expect qemu-virt aarch64 aarch64 "a QEMU virt board is plain aarch64"
 expect raspberry-pi aarch64 aarch64 "a Raspberry Pi is plain aarch64"
 expect acpi aarch64 aarch64 "an aarch64 machine without a device tree is plain aarch64"
 expect acpi x86_64 x86 "an x86 machine without a device tree is x86"
+expect acpi arm64 aarch64 "BSD arm64 is the aarch64 ABI"
+expect acpi amd64 x86 "BSD amd64 is the x86 ABI"
+expect m1-mini arm64 aarch64-apple "BSD CPU spelling preserves the firmware family"
 pass "unknown aarch64 and x86 machines need no family"
 
 # Only a token's vendor prefix identifies the board; the old detector matched
@@ -262,3 +265,8 @@ for platform in x86 aarch64 aarch64-apple; do
   fi
 done
 pass "omarchy-hw-x86 and omarchy-hw-aarch64 split every platform by its CPU"
+TEST_ARCH=arm64 PATH="$stub_bin:$ROOT/bin:$PATH" omarchy-hw-aarch64 || fail "the ARM predicate accepts BSD arm64"
+TEST_ARCH=amd64 PATH="$stub_bin:$ROOT/bin:$PATH" omarchy-hw-x86 || fail "the x86 predicate accepts BSD amd64"
+! TEST_ARCH=arm64 PATH="$stub_bin:$ROOT/bin:$PATH" omarchy-hw-x86 || fail "BSD arm64 is never x86"
+! TEST_ARCH=amd64 PATH="$stub_bin:$ROOT/bin:$PATH" omarchy-hw-aarch64 || fail "BSD amd64 is never ARM"
+pass "architecture predicates accept BSD names and reject the other CPU family"
