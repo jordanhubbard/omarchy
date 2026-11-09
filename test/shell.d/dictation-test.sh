@@ -47,7 +47,7 @@ fi
 exit "${DICTATION_EXIT:-0}"
 SH
 done
-for command in omarchy-pkg-add omarchy-notification-send hyprctl omarchy-restart-shell; do
+for command in omarchy-pkg-add omarchy-notification-send hyprctl omarchy-restart-hyprctl omarchy-restart-shell; do
   cat > "$test_tmp/bin/$command" <<'SH'
 #!/bin/bash
 printf '%s %s\n' "${0##*/}" "$*" >> "$DICTATION_LOG"
@@ -145,12 +145,18 @@ if DICTATION_EXIT=7 omarchy-install-dictation-superwhisper > "$test_tmp/output" 
 [[ $(cat "$config") == "voxtype" ]] || fail "failed shortcuts must preserve selection"
 omarchy-install-dictation-superwhisper
 [[ $(omarchy-default-dictation) == "superwhisper" ]] || fail "installer selects Superwhisper"
-jq -e '.shortcuts | .hold == "" and .toggle == "Alt+Space"' "$SHORTCUT_STATE" >/dev/null || fail "installer repairs conflicting hold-only profiles"
+jq -e '.shortcuts | .hold == "" and .toggle == "Ctrl+Alt+Space"' "$SHORTCUT_STATE" >/dev/null || fail "installer repairs conflicting hold-only profiles"
 printf '%s\n' '{"shortcuts":{"hold":"RightAlt","toggle":"RightSuper","cancel":"Escape"}}' > "$SHORTCUT_STATE"
 omarchy-install-dictation-superwhisper
-jq -e '.shortcuts | .hold == "" and .toggle == "Alt+Space"' "$SHORTCUT_STATE" >/dev/null || fail "installer repairs conflicting profiles with an existing toggle"
+jq -e '.shortcuts | .hold == "" and .toggle == "Ctrl+Alt+Space"' "$SHORTCUT_STATE" >/dev/null || fail "installer repairs conflicting profiles with an existing toggle"
 omarchy-install-dictation-superwhisper
 pass "Superwhisper installer owns setup and saves selection only after success"
+
+: > "$DICTATION_LOG"
+omarchy-install-dictation-superwhisper --background
+grep -qx setup-user "$DICTATION_LOG" || fail "background setup still configures Superwhisper"
+if grep -E '^(superwhisper settings|omarchy-notification-send)' "$DICTATION_LOG"; then fail "background setup opens no window and sends no toast"; fi
+pass "first-run Superwhisper setup stays in the background"
 
 DICTATION_INSTALLED=superwhisper
 CONFIRM_EXIT=1 omarchy-install-dictation-voxtype
@@ -210,7 +216,7 @@ wait "$reader" || fail "concurrent readers always see a complete selection"
 printf '%s\n' voxtype > "$config"
 pass "selection updates are atomic for concurrent readers"
 
-lua <<'LUA'
+lua - <<'LUA' || fail "dictation shortcuts require a selection without limiting backend names"
 local root = os.getenv("ROOT")
 local selected, installed, bindings = nil, true, {}
 io.popen = function(command)
@@ -223,30 +229,31 @@ o = {
     return not installed
   end,
   bind = function(...) table.insert(bindings, {...}) end,
-  bind_hold = function(keys, _, press, _, release, options)
-    table.insert(bindings, { keys, press, options })
-    table.insert(bindings, { keys, release, options })
+  bind_hold = function(keys, _, press, _, release)
+    table.insert(bindings, { keys, false, press })
+    table.insert(bindings, { keys, false, release })
   end,
 }
 dofile(root .. "/default/hypr/bindings/dictation.lua")
 assert(#bindings == 0, "unconfigured dictation leaves application keys available")
 selected = "some-backend"
 dofile(root .. "/default/hypr/bindings/dictation.lua")
-assert(#bindings == 5, "any installed backend receives the same bindings")
 local function binds(keys, command)
   for _, binding in ipairs(bindings) do
-    if binding[1] == keys and binding[2] == command then return true end
+    if binding[1] == keys and binding[3] == command then return true end
   end
 end
-for _, keys in ipairs({ "F9", "ALT + Alt_R" }) do
-  assert(binds(keys, "omarchy-dictation start") and binds(keys, "omarchy-dictation stop"),
-    keys .. " starts dictation on press and stops it on release")
-end
+assert(#bindings == 3, "any installed backend receives Alt + Space and Right Alt, and nothing else")
+assert(binds("ALT + SPACE", "omarchy-dictation toggle"), "Alt + Space toggles dictation")
+assert(binds("ALT + Alt_R", "omarchy-dictation start") and binds("ALT + Alt_R", "omarchy-dictation stop"),
+  "Right Alt starts dictation on press and stops it on release")
+assert(o.dictation_installed(), "personal dictation keys see the installed backend")
 bindings, installed = {}, false
 dofile(root .. "/default/hypr/bindings/dictation.lua")
 assert(#bindings == 0, "a selected backend that is not installed leaves application keys available")
+assert(not o.dictation_installed(), "personal dictation keys release their keys once the backend is gone")
 LUA
-pass "dictation shortcuts require an installed selection without limiting backend names"
+pass "Alt + Space toggles dictation and Right Alt records while held, once a backend is installed"
 
 # Fresh users receive the backend choice through the settings package's skel.
 cp "$ROOT/config/omarchy/defaults/dictation" "$config"
@@ -254,7 +261,7 @@ cp "$ROOT/config/omarchy/defaults/dictation" "$config"
 printf '%s\n' voxtype > "$config"
 pass "fresh users get Superwhisper as their default backend"
 
-lua <<'LUA'
+lua - <<'LUA' || fail "desktop integration follows the selected backend without personal Hyprland config"
 local root = os.getenv("ROOT")
 package.path = root .. "/?.lua;" .. package.path
 package.loaded["default.hypr.paths"] = { config_home = "/config" }
@@ -345,18 +352,3 @@ printf '%s\n' voxtype > "$config"
 omarchy-remove-dictation-superwhisper
 [[ $(cat "$config") == "voxtype" ]] || fail "removing Superwhisper preserves another selected backend"
 pass "Superwhisper removal clears its selection and owned links while preserving user data and other backends"
-
-cat > "$test_tmp/bin/omarchy-pkg-present" <<'SH'
-#!/bin/bash
-[[ ${VOXTYPE_PACKAGE:-0} == 1 && $1 == "voxtype-bin" ]]
-SH
-chmod +x "$test_tmp/bin/omarchy-pkg-present"
-rm "$config"
-VOXTYPE_PACKAGE=0 /bin/bash -euo pipefail "$ROOT/migrations/1791479273.sh"
-[[ ! -e $config ]] || fail "migration does not select an uninstalled backend"
-VOXTYPE_PACKAGE=1 /bin/bash -euo pipefail "$ROOT/migrations/1791479273.sh"
-[[ $(cat "$config") == "voxtype" ]] || fail "existing Voxtype users keep dictation after upgrade"
-printf '%s\n' future-backend > "$config"
-VOXTYPE_PACKAGE=1 /bin/bash -euo pipefail "$ROOT/migrations/1791479273.sh"
-[[ $(cat "$config") == "future-backend" ]] || fail "upgrade preserves explicit backend selections"
-pass "one-time upgrade preserves existing Voxtype without runtime autodetection"

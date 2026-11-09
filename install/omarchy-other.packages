@@ -34,6 +34,7 @@ lib32-nvidia-utils
 pipewire
 pipewire-alsa
 pipewire-jack
+pipewire-libcamera
 pipewire-pulse
 qt6-wayland
 snapper
@@ -61,6 +62,9 @@ dell-xps-touchpad-haptics
 dell-xps13-sidecar-amps
 linux-firmware-cirrus-dx13260
 
+# ASUS laptop support packages
+asus-proart-p14-speaker-firmware
+
 # Speaker tunings (LV2 limiter every tuning ends in)
 lsp-plugins-lv2
 
@@ -73,3 +77,8 @@ t2fanrd
 
 # Framework 16
 qmk-hid
+
+# Elgato Cam Link 4K virtual camera
+v4l2loopback-dkms
+v4l2loopback-utils
+v4l2-relayd
