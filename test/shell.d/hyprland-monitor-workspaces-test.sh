@@ -284,7 +284,7 @@ function shows(name)
 end
 
 function state_file()
-  local file = io.open(os.getenv("XDG_STATE_HOME") .. "/omarchy/monitor-workspaces")
+  local file = io.open(os.getenv("XDG_STATE_HOME") .. "/omarchy/monitors/workspaces")
   local content = file and file:read("a") or ""
   if file then file:close() end
   return content
@@ -591,7 +591,7 @@ world.handlers["monitor.removed"]({ name = "DP-3" })
 fire_timers()
 load_module()
 world.handlers["hyprland.start"]()
-local file = io.open(os.getenv("XDG_STATE_HOME") .. "/omarchy/monitor-workspaces-merged")
+local file = io.open(os.getenv("XDG_STATE_HOME") .. "/omarchy/monitors/workspaces-merged")
 check(file:read("a") == "", "a new session forgot where workspaces came from")
 file:close()
 ' || fail "a workspace with no room to join waits as a guest"

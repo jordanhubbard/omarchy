@@ -132,8 +132,10 @@ hl = {
     table.insert(seen, opts)
   end,
   -- toggles.lua goes on to restore workspace layouts, which looks at the open
-  -- windows; these reloads have none.
+  -- windows; these reloads have none. It also loads the saved monitor
+  -- settings, which listen for monitors arriving.
   get_windows = function() return {} end,
+  on = function() end,
 }
 
 dofile(os.getenv("OMARCHY_PATH") .. "/default/hypr/bootstrap.lua")
@@ -166,6 +168,7 @@ hl = {
     table.insert(seen, opts)
   end,
   get_windows = function() return {} end,
+  on = function() end,
 }
 os.execute = function()
   executed = true
@@ -246,6 +249,7 @@ local disabled = {}
 hl = {
   device = function(opts) table.insert(disabled, opts) end,
   get_windows = function() return {} end,
+  on = function() end,
 }
 dofile(os.getenv("OMARCHY_PATH") .. "/default/hypr/bootstrap.lua")
 require("default.hypr.toggles")

@@ -357,23 +357,8 @@
   "trigger.tests.disk-speedtest": {
     "label": "Diska ātruma tests"
   },
-  "setup.monitors": {
-    "label": "Monitori"
-  },
-  "setup.keybindings": {
-    "label": "Taustiņu saīsnes"
-  },
   "setup.input": {
     "label": "Ievade"
-  },
-  "setup.typing": {
-    "label": "Rakstīšana"
-  },
-  "setup.typing.keyboard": {
-    "label": "Tastatūras izkārtojumi"
-  },
-  "setup.typing.input": {
-    "label": "Ievades metodes"
   },
   "setup.language": {
     "label": "Valoda"
@@ -1286,6 +1271,27 @@
   "setup.default.agent.qwen": {
     "label": "Qwen Code"
   },
+  "setup.default.dictation.hex": {
+    "label": "Hex"
+  },
+  "remove.dictation.hex": {
+    "label": "Hex"
+  },
+  "setup.keyboard": {
+    "label": "Tastatūra"
+  },
+  "setup.keyboard.keybindings": {
+    "label": "Taustiņu saistījumi"
+  },
+  "setup.keyboard.inputs": {
+    "label": "Tastatūras ievade"
+  },
+  "setup.keyboard.input-methods": {
+    "label": "Ievades metodes"
+  },
+  "install.ai.herdr": {
+    "label": "Herdr Desktop"
+  },
   "install.ai.amp": {
     "label": "Amp Desktop"
   },
@@ -1294,5 +1300,14 @@
   },
   "install.service.notion": {
     "label": "Notion"
+  },
+  "install.gaming.moonlight": {
+    "label": "Moonlight"
+  },
+  "remove.gaming.moonlight": {
+    "label": "Moonlight"
+  },
+  "setup.default.editor.plain": {
+    "label": "Vienkāršs"
   }
 }

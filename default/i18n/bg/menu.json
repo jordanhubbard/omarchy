@@ -357,23 +357,8 @@
   "trigger.tests.disk-speedtest": {
     "label": "Тест диск"
   },
-  "setup.monitors": {
-    "label": "Монитори"
-  },
-  "setup.keybindings": {
-    "label": "Клавишни комбинации"
-  },
   "setup.input": {
     "label": "Въвеждане"
-  },
-  "setup.typing": {
-    "label": "Писане"
-  },
-  "setup.typing.keyboard": {
-    "label": "Клавиатурни подредби"
-  },
-  "setup.typing.input": {
-    "label": "Методи за въвеждане"
   },
   "setup.language": {
     "label": "Език"
@@ -1286,6 +1271,27 @@
   "setup.default.agent.qwen": {
     "label": "Qwen Code"
   },
+  "setup.default.dictation.hex": {
+    "label": "Hex"
+  },
+  "remove.dictation.hex": {
+    "label": "Hex"
+  },
+  "setup.keyboard": {
+    "label": "Клавиатура"
+  },
+  "setup.keyboard.keybindings": {
+    "label": "Клавишни комбинации"
+  },
+  "setup.keyboard.inputs": {
+    "label": "Клавиатурно въвеждане"
+  },
+  "setup.keyboard.input-methods": {
+    "label": "Методи за въвеждане"
+  },
+  "install.ai.herdr": {
+    "label": "Herdr Desktop"
+  },
   "install.ai.amp": {
     "label": "Amp Desktop"
   },
@@ -1294,5 +1300,14 @@
   },
   "install.service.notion": {
     "label": "Notion"
+  },
+  "install.gaming.moonlight": {
+    "label": "Moonlight"
+  },
+  "remove.gaming.moonlight": {
+    "label": "Moonlight"
+  },
+  "setup.default.editor.plain": {
+    "label": "Обикновен"
   }
 }

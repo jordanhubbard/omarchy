@@ -447,23 +447,20 @@
   "trigger.tests.disk-speedtest": {
     "label": "Disk Speed Test"
   },
-  "setup.monitors": {
-    "label": "Monitors"
+  "setup.keyboard": {
+    "label": "Keyboard"
   },
-  "setup.keybindings": {
+  "setup.keyboard.keybindings": {
     "label": "Keybindings"
+  },
+  "setup.keyboard.inputs": {
+    "label": "Keyboard Inputs"
+  },
+  "setup.keyboard.input-methods": {
+    "label": "Input Methods"
   },
   "setup.input": {
     "label": "Input"
-  },
-  "setup.typing": {
-    "label": "Typing"
-  },
-  "setup.typing.keyboard": {
-    "label": "Keyboard Layouts"
-  },
-  "setup.typing.input": {
-    "label": "Input Methods"
   },
   "setup.language": {
     "label": "Language"
@@ -597,6 +594,9 @@
     "label": "Dictation",
     "title": "Default Dictation"
   },
+  "setup.default.dictation.hex": {
+    "label": "Hex"
+  },
   "setup.default.dictation.superwhisper": {
     "label": "Superwhisper"
   },
@@ -622,6 +622,9 @@
   "setup.default.editor": {
     "label": "Editor",
     "title": "Default Editor"
+  },
+  "setup.default.editor.plain": {
+    "label": "Plain"
   },
   "setup.default.editor.neovim": {
     "label": "Neovim"
@@ -875,6 +878,9 @@
   "install.ai.grok-bot": {
     "label": "Grok Bot"
   },
+  "install.ai.herdr": {
+    "label": "Herdr Desktop"
+  },
   "install.ai.hermes": {
     "label": "Hermes Desktop"
   },
@@ -910,6 +916,9 @@
   },
   "install.gaming.xbox-controllers": {
     "label": "Xbox Controllers"
+  },
+  "install.gaming.moonlight": {
+    "label": "Moonlight"
   },
   "install.gaming.battlenet": {
     "label": "Battle.net"
@@ -1091,6 +1100,9 @@
   "remove.ai.claude": {
     "label": "Claude Desktop"
   },
+  "remove.dictation.hex": {
+    "label": "Hex"
+  },
   "remove.dictation.superwhisper": {
     "label": "Superwhisper"
   },
@@ -1132,6 +1144,9 @@
   },
   "remove.gaming.xbox-controllers": {
     "label": "Xbox Controllers (󰂯)"
+  },
+  "remove.gaming.moonlight": {
+    "label": "Moonlight"
   },
   "remove.gaming.battlenet": {
     "label": "Battle.net"
