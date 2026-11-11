@@ -2,4 +2,4 @@
 
 # omarchy:summary=Detect whether the CPU is x86_64.
 
-[[ $(uname -m) == "x86_64" ]]
+[[ $(uname -m) =~ ^(x86_64|amd64)$ ]]

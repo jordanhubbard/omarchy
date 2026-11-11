@@ -4,6 +4,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -18,15 +19,15 @@ Panel {
   property int snapshotIndex: 0
   property bool cursorActive: false
 
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
+  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property string glyph: "󰁯"
   readonly property string problemText: backup.problem
 
   readonly property color barIconColor: backup.attention
-    ? (bar ? bar.urgent : Color.urgent)
+    ? (bar ? bar.urgent : Commons.Color.urgent)
     : (backup.paused || !backup.configured ? Qt.darker(barForeground, 1.55) : barForeground)
 
   readonly property var actions: {
@@ -35,7 +36,7 @@ Panel {
     var rows = [{
       id: "now",
       glyph: "󰑓",
-      label: backup.running ? "Backing up now" : "Back up now",
+      label: backup.running ? Commons.I18n.t("backup.backingUpNow") : Commons.I18n.t("backup.backUpNow"),
       detail: backup.running ? Model.progressText(backup.status) : "Send what has changed since the last run"
     }]
 
@@ -104,7 +105,6 @@ Panel {
     focusSection = "actions"
     actionIndex = 0
     backup.nowMs = Date.now()
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
   Service {
@@ -112,7 +112,7 @@ Panel {
     settings: root.settings
   }
 
-  IpcHandler {
+  ShellIpc {
     target: root.ipcTarget
     function open(): void { root.open() }
     function close(): void { root.close() }
@@ -143,12 +143,13 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
-    focusTarget: keyCatcher
+    focusTarget: panel.loadedContent
     contentWidth: panel.fittedContentWidth(Style.space(360))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(560))
+    contentHeight: panel.fittedContentHeight(panel.loadedContentHeight, Style.space(560))
 
-    PanelKeyCatcher {
+    content: PanelKeyCatcher {
       id: keyCatcher
+      implicitHeight: column.implicitHeight
       anchors.fill: parent
       onMoveRequested: function(dx, dy) {
         if (!root.cursorActive) { root.cursorActive = true; return }
@@ -182,7 +183,7 @@ Panel {
           PanelHero {
             id: hero
             width: parent.width
-            title: "Backups"
+            title: Commons.I18n.t("backup.title")
             meta: backup.heroMeta
             foreground: root.foreground
             fontFamily: root.fontFamily
@@ -214,7 +215,7 @@ Panel {
               width: parent.width * Math.max(0, Math.min(100, backup.percent)) / 100
               radius: height / 2
               color: root.foreground
-              Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutQuad } }
+              Behavior on width { NumberAnimation { duration: Style.duration(240); easing.type: Easing.OutQuad } }
             }
           }
 
@@ -238,7 +239,7 @@ Panel {
             InfoPair { label: "Repository"; value: backup.repositoryText }
             InfoPair {
               visible: !backup.offsite
-              label: "Warning"
+              label: Commons.I18n.t("backup.warning")
               value: "Local disk, not off-site"
             }
           }
@@ -270,7 +271,7 @@ Panel {
             PanelSeparator { foreground: root.foreground }
 
             PanelSectionHeader {
-              text: "RECENT BACKUPS"
+              text: Commons.I18n.t("backup.recentBackups")
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
