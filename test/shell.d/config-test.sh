@@ -128,9 +128,9 @@ for source, destination, legacy in package_defaults:
 # A user unit has to be on the machine before anything turns it on: shipped in
 # /usr/lib/systemd/user, or copied out of default/ by the command enabling it.
 def installs_first(text):
-  source = re.search(r'(\w+)="[^"\n]*default/systemd/user/', text)
+  source = re.search(r'(\w+)="[^"\n]*default/systemd/user(?:/|")', text)
   held = rf"|\$\{{?{source[1]}\b" if source else ""
-  copy = re.search(rf"^[ \t]*(?:sudo[ \t]+)?(?:install|cp)\b[^\n]*(?:default/systemd/user/{held})", text, re.MULTILINE)
+  copy = re.search(rf"^[ \t]*(?:sudo[ \t]+)?(?:install|cp|ln[ \t]+-[^ \t\n]*s[^ \t\n]*)\b[^\n]*(?:default/systemd/user/{held})", text, re.MULTILINE)
   enable = text.find("systemctl --user enable")
   return bool(copy) and (enable < 0 or copy.start() < enable)
 
@@ -140,7 +140,24 @@ if installs_first(named + "systemctl --user enable a.service\n"):
 if installs_first(named + 'systemctl --user enable a.service\ninstall -Dm644 "$unit" "$target"\n'):
   errors.append("unit check accepts a command that installs a unit after enabling it")
 
-scripts = [path.read_text(errors="ignore") for folder in ("bin", "install", "migrations")
+# Resolve literal local companions at their source position. Backup setup
+# sources its shipped-unit directory from omarchy-backup-env and installs
+# symlinks, which systemd supports as well as copied unit files. Dynamic shell
+# sources remain unresolved; this check never executes setup or reads HOME.
+def script_text(path):
+  text = path.read_text(errors="ignore")
+  def companion(match):
+    source = root / "bin" / match[1]
+    return source.read_text(errors="ignore") if source.is_file() else match[0]
+  return re.sub(r"^source[ \t]+([A-Za-z0-9_-]+)[ \t]*$", companion, text, flags=re.MULTILINE)
+
+linked = named + 'ln -sf "$unit" "$target"\n'
+if not installs_first(linked + "systemctl --user enable a.service\n"):
+  errors.append("unit check rejects a shipped unit symlink installed before enabling")
+if installs_first(named + 'systemctl --user enable a.service\nln -sf "$unit" "$target"\n'):
+  errors.append("unit check accepts a unit symlink installed after enabling")
+
+scripts = [script_text(path) for folder in ("bin", "install", "migrations")
            for path in (root / folder).rglob("*") if path.is_file()]
 for unit in sorted(path.name for path in (root / "default/systemd/user").glob("*.service")):
   if f"/usr/lib/systemd/user/{unit}" in pkgbuild:
