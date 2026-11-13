@@ -8,6 +8,7 @@ set -euo pipefail
 reference=$(realpath "$1") candidate=$(realpath "$2") out=$(realpath -m "$3")
 [[ $reference == "$HOME/src/omarchy-reference" && $candidate == "$HOME/src/omarchy" &&
   $out == "$HOME/visual-review" ]] || exit 64
+command -v wtype >/dev/null
 mkdir -p "$out"
 exec >"$out/capture.log" 2>&1
 
@@ -113,6 +114,18 @@ for label in reference candidate; do
     omarchy menu summon "$route"
     sleep 0.8 # A settled frame as well as the transition in the video below.
     capture "menu-$route"
+    # Up from the pointer-only opening selects the final row and reveals it.
+    # This checks the fold with actual compositor keyboard input.
+    wtype -k Up
+    sleep 0.2
+    capture "menu-$route-keyboard-last"
+    if [[ $route == root ]]; then
+      # System is the last root submenu in both pinned catalogs. Enter opens
+      # that submenu; no power/session action is invoked.
+      wtype -k Return
+      sleep 0.2
+      capture menu-keyboard-system
+    fi
     omarchy menu close
   done
   layout floating
