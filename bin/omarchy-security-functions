@@ -27,7 +27,7 @@ omarchy_security_require_privileged_bash_startup() {
 omarchy_security_sanitize_bash_environment() {
   local script=$1
   shift
-  local entry name environment_fd environment_pid
+  local entry name environment_fd environment_pid environment_status=0
   local -a unsets=()
 
   # Read the raw environment: privileged Bash ignores exported functions, but
@@ -42,8 +42,11 @@ omarchy_security_sanitize_bash_environment() {
         ;;
     esac
   done
+  # A process substitution need not remain waitable after its fd closes.
+  # Keep it open until the producer status is collected, including failure.
+  wait "$environment_pid" || environment_status=$?
   exec {environment_fd}<&-
-  wait "$environment_pid" || return 1
+  (( environment_status == 0 )) || return 1
   if (( ${#unsets[@]} > 0 )); then
     exec /usr/bin/env "${unsets[@]}" /usr/bin/bash -p -- "$script" "$@"
   fi
