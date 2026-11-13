@@ -62,8 +62,25 @@ launch() {
   return 1
 }
 
+settle_theme() {
+  local deadline=$((SECONDS + 30)) ready=0
+  while (( SECONDS < deadline )); do
+    if [[ $(omarchy-shell shell themeIntroBusy) == ready ]]; then
+      ((ready += 1))
+      (( ready >= 3 )) && return 0
+      sleep 1
+    else
+      ready=0
+      sleep 0.2
+    fi
+  done
+  echo "Theme reveal did not settle" >&2
+  return 1
+}
+
 capture() {
   local name=$1
+  omarchy-shell notifications dismissAll
   export OMARCHY_SCREENSHOT_DIR="$phase/$name"
   export OMASNAP_SCREENSHOT_DIR="$OMARCHY_SCREENSHOT_DIR"
   mkdir -p "$OMARCHY_SCREENSHOT_DIR"
@@ -88,6 +105,7 @@ for label in reference candidate; do
   [[ $label == "candidate" ]] && root=$candidate
   launch "$root"
   omarchy theme set "Tokyo Night"
+  settle_theme
   omarchy-shell shell ping
   layout dwindle
   capture desktop
@@ -109,6 +127,7 @@ for label in reference candidate; do
   omarchy screenrecord --fullscreen
   omarchy screenrecord --status
   recording=1
+  omarchy-shell notifications dismissAll
   # Warm panels once before their recorded transitions, as the visual guide
   # requires. The frames remain native-rate, including the theme change.
   omarchy menu summon root
