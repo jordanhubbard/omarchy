@@ -10,6 +10,15 @@ on:
   pull_request:
   push:
     branches: [quattro]
+  workflow_dispatch:
+    inputs:
+      visual_review:
+        description: Capture the reference and candidate desktop for human review
+        type: boolean
+        default: false
+      visual_reference:
+        description: Owned reference commit or branch for before captures
+        default: quattro
 
 permissions:
   contents: read
@@ -33,6 +42,12 @@ jobs:
         with:
           repository: omacom/omarchy-pkgs
           path: src/omarchy-pkgs
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ inputs.visual_review || contains(github.event.pull_request.labels.*.name, 'visual-review') }}
+        with:
+          ref: ${{ inputs.visual_reference || github.event.pull_request.base.sha || 'quattro' }}
+          path: src/omarchy-reference
           persist-credentials: false
 
       - name: Install the fetch tools
@@ -65,9 +80,11 @@ jobs:
       # QEMU (11) instead of the runner's older one, the same as
       # omarchy-iso's install test and an Omarchy workstation.
       - name: Run the tests in the VM
+        env:
+          CI_VM_VISUAL_REVIEW: ${{ (inputs.visual_review || contains(github.event.pull_request.labels.*.name, 'visual-review')) && '1' || '0' }}
         run: |
           sudo chmod 0666 /dev/kvm
-          docker run --rm --device /dev/kvm -v "$PWD:/w" -v /dev/shm/image:/image:ro -w /w -e VM_STATE_DIR=/tmp -e MEM=6G \
+          docker run --rm --device /dev/kvm -v "$PWD:/w" -v /dev/shm/image:/image:ro -w /w -e VM_STATE_DIR=/tmp -e MEM=6G -e CI_VM_VISUAL_REVIEW \
             ghcr.io/archlinux/archlinux:latest bash -euo pipefail -c '
               # pacman 7 fails every sync on a kernel without Landlock, which
               # these runners have; omarchy-iso does the same.
@@ -108,6 +125,16 @@ jobs:
               echo '```'
             } >>"$GITHUB_STEP_SUMMARY"
           fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() && (inputs.visual_review || contains(github.event.pull_request.labels.*.name, 'visual-review')) }}
+        with:
+          name: visual-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            out/visual/
+            out/visual-session.log
+            out/visual-tools.log
+          if-no-files-found: error
+          retention-days: 14
 
       # Only a failed run's logs are kept, and test/ci-vm has already printed
       # the failing files' output into the job log. GitHub's artifact service

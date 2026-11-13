@@ -96,7 +96,11 @@ until CONNECT_TIMEOUT=1 ssh_vm true 2>/dev/null; do
 done
 echo "test/ci-vm: SSH after $(seconds) s"
 
-(cd "$sources" && tar cf - --exclude=.git/objects/pack/tmp_* omarchy omarchy-pkgs) |
+source_trees=(omarchy omarchy-pkgs)
+if [[ ${CI_VM_VISUAL_REVIEW:-0} == "1" ]]; then
+  source_trees+=(omarchy-reference)
+fi
+(cd "$sources" && tar cf - --exclude=.git/objects/pack/tmp_* "${source_trees[@]}") |
   ssh_vm 'mkdir -p ~/src && tar xf - -C ~/src'
 
 # The tests keep the environment they start with, so wait for the session to
@@ -163,5 +167,27 @@ ssh_vm 'echo "source tree: $(cd ~/src/omarchy && git status --porcelain | wc -l)
 pull_kernel_log
 
 sed -n '/^Skipped checks in/,$p' "$out/run.log"
+
+# Optional review of the actual checkout's shell, after the unchanged test
+# verdict is recorded. Captures survive a failed review too; nobody's real
+# desktop is used, and the VM is discarded by the same cleanup trap.
+if [[ ${CI_VM_VISUAL_REVIEW:-0} == "1" ]]; then
+  visual_rc=0
+  ssh_vm 'sudo pacman -S --noconfirm --needed wf-recorder' >"$out/visual-tools.log" 2>&1 || visual_rc=$?
+  if (( visual_rc == 0 )); then
+    ssh_vm 'systemd-run --user --quiet --collect --wait \
+      -E OMARCHY_CI_VISUAL_REVIEW=true bash "$HOME/src/omarchy/test/ci-visual-capture" \
+      "$HOME/src/omarchy-reference" "$HOME/src/omarchy" "$HOME/visual-review"' \
+      >"$out/visual-session.log" 2>&1 || visual_rc=$?
+  fi
+  mkdir -p "$out/visual"
+  ssh_vm 'tar cf - -C "$HOME/visual-review" .' |
+    tar xf - --no-same-owner -C "$out/visual" || visual_rc=1
+  if (( visual_rc != 0 )); then
+    cat "$out/visual-tools.log" "$out/visual-session.log"
+    echo "test/ci-vm: visual capture failed ($visual_rc); partial evidence retained" >&2
+    exit "$visual_rc"
+  fi
+fi
 # The tests' verdict is the run's verdict.
 [[ $rc == "0" ]]

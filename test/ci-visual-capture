@@ -1,0 +1,135 @@
+#!/bin/bash
+
+# Capture reference/candidate UI in test/ci-vm's disposable desktop. This
+# produces review material, never an automatic verdict about visual quality.
+set -euo pipefail
+
+[[ ${OMARCHY_CI_VISUAL_REVIEW:-} == "true" && $USER == "omarchy" ]] || exit 64
+reference=$(realpath "$1") candidate=$(realpath "$2") out=$(realpath -m "$3")
+[[ $reference == "$HOME/src/omarchy-reference" && $candidate == "$HOME/src/omarchy" &&
+  $out == "$HOME/visual-review" ]] || exit 64
+mkdir -p "$out"
+exec >"$out/capture.log" 2>&1
+
+session_root=${OMARCHY_PATH:?session OMARCHY_PATH is required}
+session_path=$PATH
+recording=0
+restore() {
+  local result=$?
+  trap - EXIT
+  if (( recording )); then
+    omarchy screenrecord --stop-recording || true
+  fi
+  export OMARCHY_PATH="$session_root" PATH="$session_path"
+  if ! "$session_root/bin/omarchy-restart-shell"; then
+    echo "Could not restore the VM's installed shell" >&2
+    result=1
+  fi
+  journalctl --user -b -t omarchy-shell --no-pager >"$out/shell-journal.log" || true
+  if ! (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS); then
+    result=1
+  fi
+  exit "$result"
+}
+trap restore EXIT
+
+hyprctl -j monitors >"$out/monitors.json"
+pacman -Q >"$out/installed-packages.txt"
+git -C "$reference" rev-parse HEAD >"$out/reference.sha"
+git -C "$candidate" rev-parse HEAD >"$out/candidate.sha"
+
+launch() {
+  local root=$1 previous command encoded deadline ready=0
+  for previous in "$session_root" "$reference" "$candidate"; do
+    while timeout 30 quickshell kill -p "$previous/shell" --any-display >/dev/null 2>&1; do :; done
+  done
+  export OMARCHY_PATH="$root" PATH="$root/bin:$session_path"
+  printf -v command 'env OMARCHY_PATH=%q PATH=%q %q' "$root" "$PATH" "$root/bin/omarchy-launch-shell"
+  encoded=$(jq -rn --arg command "$command" '$command | @json')
+  hyprctl dispatch "hl.dsp.exec_cmd($encoded)"
+  deadline=$((SECONDS + 90))
+  while (( SECONDS < deadline )); do
+    if omarchy-shell shell ping; then
+      ((ready += 1))
+      (( ready >= 3 )) && return 0
+      sleep 1
+    else
+      ready=0
+      sleep 0.2
+    fi
+  done
+  echo "Checkout shell never became ready: $root" >&2
+  return 1
+}
+
+capture() {
+  local name=$1
+  export OMARCHY_SCREENSHOT_DIR="$phase/$name"
+  export OMASNAP_SCREENSHOT_DIR="$OMARCHY_SCREENSHOT_DIR"
+  mkdir -p "$OMARCHY_SCREENSHOT_DIR"
+  omarchy capture screenshot fullscreen save
+  compgen -G "$OMARCHY_SCREENSHOT_DIR/*.png" >/dev/null
+  omarchy-shell notifications dismiss "$(omarchy-i18n capture.screenshotSaved)" || true
+}
+
+layout() {
+  local wanted=$1 attempt
+  for attempt in 1 2 3; do
+    [[ $(omarchy-hyprland-workspace-layout-current) == "$wanted" ]] && return 0
+    omarchy-hyprland-workspace-layout-toggle
+  done
+  [[ $(omarchy-hyprland-workspace-layout-current) == "$wanted" ]]
+}
+
+for label in reference candidate; do
+  phase="$out/$label"
+  mkdir -p "$phase/recordings"
+  root=$reference
+  [[ $label == "candidate" ]] && root=$candidate
+  launch "$root"
+  omarchy theme set "Tokyo Night"
+  omarchy-shell shell ping
+  layout dwindle
+  capture desktop
+  for route in root system setup; do
+    omarchy menu summon "$route"
+    sleep 0.8 # A settled frame as well as the transition in the video below.
+    capture "menu-$route"
+    omarchy menu close
+  done
+  layout floating
+  omarchy-shell shell ping
+  capture floating-dock
+  omarchy-shell omarchy.dock apps
+  sleep 0.8
+  capture apps
+  omarchy-shell omarchy.dock apps
+
+  export OMARCHY_SCREENRECORD_DIR="$phase/recordings" OMARCHY_SCREENRECORD_DEBUG=true
+  omarchy screenrecord --fullscreen
+  omarchy screenrecord --status
+  recording=1
+  # Warm panels once before their recorded transitions, as the visual guide
+  # requires. The frames remain native-rate, including the theme change.
+  omarchy menu summon root
+  sleep 0.8
+  omarchy menu close
+  sleep 0.8
+  omarchy-shell omarchy.dock apps
+  sleep 1
+  omarchy theme set "Catppuccin"
+  sleep 1
+  omarchy-shell omarchy.dock apps
+  omarchy menu summon root
+  sleep 1
+  omarchy menu close
+  omarchy screenrecord --stop-recording
+  recording=0
+  video=$(find "$phase/recordings" -maxdepth 1 -name '*.mp4' -print -quit)
+  [[ -n $video && -s $video ]]
+  ffprobe -v error -count_frames -show_streams -of json "$video" >"$phase/video.json"
+  jq -e '.streams | any(.codec_type == "video" and (.nb_read_frames | tonumber) > 0)' "$phase/video.json"
+  hyprctl layers -j >"$phase/layers.json"
+  omarchy-shell shell listPlugins >"$phase/plugins.txt"
+done
+
