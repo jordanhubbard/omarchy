@@ -66,7 +66,7 @@ def write_json(path, data):
 
 
 class Probe:
-    def __init__(self, language=None, malformed=False, malformed_english=False):
+    def __init__(self, language=None, malformed=False, malformed_english=False, pause_binding=False):
         self.tmp = tempfile.TemporaryDirectory(prefix='omarchy-i18n-startup-')
         self.path = Path(self.tmp.name)
         self.config = self.path / 'config'
@@ -94,6 +94,8 @@ class Probe:
             self.language.write_text(language)
         self.directory = self.path / 'plugin-directory'
         self.directory.write_text(str(self.plugin))
+        self.gate = self.path / 'publication-gate'
+        self.release = self.path / 'publication-release'
         self.result = self.path / 'result.json'
         self.log_path = self.path / 'quickshell.log'
         self.log = self.log_path.open('w')
@@ -103,6 +105,8 @@ class Probe:
         env.update({
             'OMARCHY_PATH': str(self.path / 'install'), 'OMARCHY_LANGUAGE_FILE': str(self.language),
             'OMARCHY_TEST_PLUGIN_DIRECTORY': str(self.directory), 'OMARCHY_TEST_RESULT': str(self.result),
+            'OMARCHY_TEST_GATE': str(self.gate) if pause_binding else '',
+            'OMARCHY_TEST_RELEASE': str(self.release) if pause_binding else '',
             'XDG_RUNTIME_DIR': str(self.path / 'runtime'), 'HOME': str(self.path / 'home'),
             'XDG_CONFIG_HOME': str(self.path / 'home/.config'), 'XDG_CACHE_HOME': str(self.path / 'cache'),
             'XDG_STATE_HOME': str(self.path / 'state'), 'QT_QPA_PLATFORM': 'offscreen',
@@ -162,6 +166,24 @@ try:
     startup('malformed selected catalogs fall back to English', french_fallback, language='fr\n', malformed=True)
     startup('a malformed English catalog does not hide valid selected translations',
             dict(danish, shellFallback='missing English'), language='da\n', malformed_english=True)
+
+    probe = Probe(pause_binding=True)
+    try:
+        probe.wait(english)
+        probe.result.unlink()  # Require a fresh report after the notification.
+        write_text(probe.language, 'da')
+        deadline = time.monotonic() + 5
+        while not probe.gate.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert probe.gate.read_text() == 'ready', probe.log_path.read_text()
+        probe.language.unlink()
+        write_text(probe.release, 'continue')
+        probe.wait(english)
+        log = probe.log_path.read_text()
+        assert not any(message in log for message in ('Argument missing', 'Binding loop', 'TypeError', 'ReferenceError')), log
+        print('ok - changes during binding publication retain the language watch', flush=True)
+    finally:
+        probe.close()
 
     probe = Probe()
     try:
