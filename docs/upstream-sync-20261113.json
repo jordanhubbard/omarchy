@@ -1,0 +1,49 @@
+{
+  "schema": "daemonarchy/omarchy-upstream-sync@1",
+  "observed_utc": "2026-11-13T13:17:28.121172+00:00",
+  "owned_parent": "c39121a4746c0ea533ffdf437788c62810a0f19e",
+  "previous_upstream": "74a67e9cbc1052674e1e2ae37eeefa358157079e",
+  "upstream_parent": "3f974d011575c53dcec452dea1c253d03b8d96bf",
+  "merge_commit": "c5c44e44982ef2fdb81a0eba2560b466849d68f9",
+  "merge_tree": "95d9a07b53c349bf898f3102d5371ffc2da768d4",
+  "upstream_commits_added": 145,
+  "owned_paths_before": 61,
+  "owned_paths_after": 61,
+  "unexpected_downstream_paths": [],
+  "reviewed_overlap": [
+    "default/i18n/en/menu.json",
+    "default/i18n/en/shell.json",
+    "default/omarchy/omarchy-menu.jsonc",
+    "manual/24-commercial-apps-services.md"
+  ],
+  "conflict_disposition": "Combine disjoint English menu catalog additions: retain all 27 owned session/preferences/backup entries and all upstream agent/browser entries. All keys use strict three-way values; no divergent choice.",
+  "json_semantic_review": {
+    "owned_paths": 61,
+    "overlap": [
+      "default/i18n/en/menu.json",
+      "default/i18n/en/shell.json",
+      "default/omarchy/omarchy-menu.jsonc",
+      "manual/24-commercial-apps-services.md"
+    ],
+    "json_checked": 2,
+    "json_conflicts": [],
+    "json_mismatches": []
+  },
+  "local_checks": {
+    "structural_i18n": {
+      "exit": 0,
+      "log_sha256": "4fa950df4263992a535dddc23206dcf8c0dc02a4b2e0c72a2523731c7fcb82a9"
+    },
+    "extract_scan": {
+      "exit": 0,
+      "log_sha256": "e68578ab7905bc93e1dba6ac00dcb85720c0005c2d8dbfa5173a11f96b5678d7"
+    }
+  },
+  "qualification": {
+    "hosted_full_vm_suite": false,
+    "visual_acceptance": false,
+    "freebsd_adaptation": false,
+    "freebsd_desktop": false,
+    "release": false
+  }
+}
