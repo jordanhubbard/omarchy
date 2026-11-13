@@ -42,7 +42,34 @@ ShellRoot {
     result.setText(JSON.stringify({first: root.first, current: snapshot()}))
   }
 
-  onLanguageChanged: Qt.callLater(report)
+  onLanguageChanged: {
+    if (language === "da" && Quickshell.env("OMARCHY_TEST_GATE") !== "") {
+      publicationGate.setText("ready")
+      // Let the controller delete the selection while its new value is
+      // being published. No event-loop turn can rearm a lost watch here.
+      var deadline = Date.now() + 5000
+      while (Date.now() < deadline) {
+        publicationRelease.reload()
+        if (publicationRelease.text() === "continue") break
+      }
+    }
+    Qt.callLater(report)
+  }
+
+  FileView {
+    id: publicationGate
+    path: Quickshell.env("OMARCHY_TEST_GATE")
+    preload: false
+    blockWrites: true
+  }
+
+  FileView {
+    id: publicationRelease
+    path: Quickshell.env("OMARCHY_TEST_RELEASE")
+    preload: false
+    blockAllReads: true
+    printErrors: false
+  }
   onLocaleChanged: Qt.callLater(report)
   onNumberChanged: Qt.callLater(report)
   onRtlChanged: Qt.callLater(report)
