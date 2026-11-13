@@ -74,7 +74,7 @@ keys=$({
   if [[ ${CI_VM_VISUAL_REVIEW:-0} == "1" ]]; then
     # Only this capture-tool install, in this disposable guest. Do not grant
     # passwordless sudo to the normal test suite or alter the runner's host.
-    printf '%s\n' 'f /etc/sudoers.d/omarchy-ci-visual-review 0440 root root - omarchy ALL=(root) NOPASSWD: /usr/bin/pacman -Syu --noconfirm --needed wf-recorder\n'
+    printf '%s\n' 'f /etc/sudoers.d/omarchy-ci-visual-review 0440 root root - omarchy ALL=(root) NOPASSWD: /usr/bin/env OMARCHY_ALLOW_DIRECT_PACMAN=1 /usr/bin/pacman -Syu --noconfirm --needed wf-recorder\n'
   fi
 } | base64 -w0)
 
@@ -181,7 +181,7 @@ sed -n '/^Skipped checks in/,$p' "$out/run.log"
 if [[ ${CI_VM_VISUAL_REVIEW:-0} == "1" ]]; then
   visual_rc=0
   : >"$out/visual-session.log"
-  ssh_vm 'sudo pacman -Syu --noconfirm --needed wf-recorder' >"$out/visual-tools.log" 2>&1 || visual_rc=$?
+  ssh_vm 'sudo /usr/bin/env OMARCHY_ALLOW_DIRECT_PACMAN=1 /usr/bin/pacman -Syu --noconfirm --needed wf-recorder' >"$out/visual-tools.log" 2>&1 || visual_rc=$?
   if (( visual_rc == 0 )); then
     ssh_vm 'systemd-run --user --quiet --collect --wait \
       -E OMARCHY_CI_VISUAL_REVIEW=true bash "$HOME/src/omarchy/test/ci-visual-capture" \
