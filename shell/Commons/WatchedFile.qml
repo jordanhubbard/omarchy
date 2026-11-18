@@ -11,10 +11,18 @@ QtObject {
   property string path: ""
   readonly property string text: reader.text()
 
-  // Watch first, then read: FileView's reload() reads and only then replaces
-  // its watcher, so a change landing between the two would be lost.
+  // Keep the current watch alive while readers publish dependent bindings.
+  // Rearming inside its fileChanged callback can discard a change made during
+  // that publication. Coalesce the rearm until the callback has unwound.
   function reread() {
+    reader.reload()
+    Qt.callLater(root.rearm)
+  }
+
+  function rearm() {
     watcher.reload()
+    // Catch changes during the rearm as well as edits to a replacement whose
+    // old inode is still alive under another name.
     reader.reload()
   }
 
