@@ -19,18 +19,18 @@ QtObject {
   readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")
 
-  readonly property string language: languageCode(languageFile.text())
-  readonly property var localeSettings: parseCatalog(registryFile.text())[root.language] || ({})
+  readonly property string language: languageCode(languageFile.text)
+  readonly property var localeSettings: parseCatalog(registryFile.text)[root.language] || ({})
   readonly property string formatLocale: localeSettings.formatLocale || "en-US"
   // From the registry: how numbers are written and which way text runs.
   readonly property string decimal: localeSettings.decimal || "."
   readonly property string zeroDigit: localeSettings.zeroDigit || "0"
   readonly property bool rightToLeft: localeSettings.direction === "rtl"
 
-  // Reading text() loads the catalog on the first lookup. These bindings
+  // Reading text loads the catalog on the first lookup. These bindings
   // also rebuild the maps when a watched catalog changes.
-  readonly property var englishStrings: parseCatalog(englishCatalogFile.text())
-  readonly property var languageStrings: parseCatalog(languageCatalogFile.text())
+  readonly property var englishStrings: parseCatalog(englishCatalogFile.text)
+  readonly property var languageStrings: parseCatalog(languageCatalogFile.text)
   readonly property var strings: {
     var merged = ({})
     for (var k in root.englishStrings) merged[k] = root.englishStrings[k]
@@ -79,23 +79,23 @@ QtObject {
     return code
   }
 
-  // Catalogs load synchronously on the first lookup. WatchedTextFile keeps
-  // the change watch active while a reload updates dependent bindings.
-  property WatchedTextFile languageFile: WatchedTextFile {
+  // The catalogs are small local files, read synchronously (WatchedFile) so
+  // the first binding to call t() already gets the string rather than the raw key.
+  property WatchedFile languageFile: WatchedFile {
     // OMARCHY_LANGUAGE_FILE overrides the location, as it does for
     // omarchy-i18n, so tests can pin a language whatever the machine uses.
     path: Quickshell.env("OMARCHY_LANGUAGE_FILE") || (root.configHome + "/omarchy/language")
   }
 
-  property WatchedTextFile englishCatalogFile: WatchedTextFile {
+  property WatchedFile englishCatalogFile: WatchedFile {
     path: root.omarchyPath + "/default/i18n/en/shell.json"
   }
 
-  property WatchedTextFile languageCatalogFile: WatchedTextFile {
+  property WatchedFile languageCatalogFile: WatchedFile {
     path: root.omarchyPath + "/default/i18n/" + root.language + "/shell.json"
   }
 
-  property WatchedTextFile registryFile: WatchedTextFile {
+  property WatchedFile registryFile: WatchedFile {
     path: root.omarchyPath + "/default/i18n/locales.json"
   }
 }
