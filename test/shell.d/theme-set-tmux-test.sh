@@ -67,7 +67,8 @@ SH
 chmod +x "$TEST_HOME/read-environment"
 tmux new-window -d -t two "$TEST_HOME/read-environment" "$TEST_HOME/quoted" "$REAL_TMUX" "$TMUX_SOCKET"
 timeout 5s "$REAL_TMUX" -S "$TMUX_SOCKET" wait-for theme-environment || fail "tmux theme environment consumer completes"
-[[ $(cat "$TEST_HOME/quoted") == "it's \$HOME ~ #{session_name} a;b" ]] || \
+printf '%s' "it's \$HOME ~ #{session_name} a;b" >"$TEST_HOME/expected-quoted"
+cmp -s "$TEST_HOME/expected-quoted" "$TEST_HOME/quoted" || \
   fail "tmux theme sync passes values through literally" "$(cat "$TEST_HOME/quoted")"
 pass "tmux theme sync passes values through literally"
 
