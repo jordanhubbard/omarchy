@@ -57,8 +57,19 @@ for target in -g "-t one" "-t two" "-t three"; do
 done
 pass "tmux theme sync sets theme variables globally and in every session"
 
-[[ $(tmux show-environment -t two QUOTED) == "QUOTED=it's \$HOME ~ #{session_name} a;b" ]] || \
-  fail "tmux theme sync passes values through literally" "$(tmux show-environment -t two QUOTED)"
+# show-environment's display may escape characters depending on the tmux
+# version. Read the bytes a real pane inherits instead of that presentation.
+cat >"$TEST_HOME/read-environment" <<'SH'
+#!/bin/bash
+printf '%s' "$QUOTED" >"$1"
+"$2" -S "$3" wait-for -S theme-environment
+SH
+chmod +x "$TEST_HOME/read-environment"
+tmux new-window -d -t two "$TEST_HOME/read-environment" "$TEST_HOME/quoted" "$REAL_TMUX" "$TMUX_SOCKET"
+timeout 5s "$REAL_TMUX" -S "$TMUX_SOCKET" wait-for theme-environment || fail "tmux theme environment consumer completes"
+printf '%s' "it's \$HOME ~ #{session_name} a;b" >"$TEST_HOME/expected-quoted"
+cmp -s "$TEST_HOME/expected-quoted" "$TEST_HOME/quoted" || \
+  fail "tmux theme sync passes values through literally" "$(cat "$TEST_HOME/quoted")"
 pass "tmux theme sync passes values through literally"
 
 [[ $(tmux show-options -gv window-style) == "fg=#222222,bg=#f4f4f4" ]] || fail "tmux theme sync sets the window style"
