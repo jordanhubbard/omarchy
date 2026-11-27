@@ -1,0 +1,50 @@
+{
+  "schema": "daemonarchy/upstream-import-audit@2",
+  "observed": "2026-11-27T05:47:30.378107+00:00",
+  "repository": "omarchy",
+  "previous_owned_main": "9a8aad4c389194597316886576db3e0c84a31b5f",
+  "upstream_reference": "v4.6.0-rc1",
+  "upstream_commit": "745271ccd293fc2e7a233b269004a9926a5c6cb4",
+  "merge_base": "a3bad0b1b7eb50e9913b4c616cf87cdec6f56931",
+  "import_tree_before_this_evidence_file": "14424e4927a50ae1d14226dd413425b37f7bcb9e",
+  "complete_tree_file_entries": 5675,
+  "upstream_changed_paths": 980,
+  "fork_changed_paths": 71,
+  "path_inventory_includes_both_sides_of_renames": true,
+  "shared_changed_paths": [
+    "bin/omarchy",
+    "default/i18n/en/menu.json",
+    "default/i18n/en/shell.json",
+    "default/omarchy/omarchy-menu.jsonc",
+    "manual/47-system-snapshots.md",
+    "test/ci-vm",
+    "test/shell.d/config-test.sh",
+    "test/shell.d/hw-platform-test.sh"
+  ],
+  "upstream_bytes_modes_and_deletions_exact_outside_fork_delta": true,
+  "fork_bytes_modes_and_deletions_exact_outside_upstream_delta": true,
+  "native_build_and_runtime_qualified": false,
+  "qualification_scope": "Complete source-tree import and preservation audit. Previous native receipts remain bound to original commits; native build/runtime, per-unit ownership/provenance, SDK and release acceptance remain open.",
+  "manual_resolution": {
+    "file": "default/i18n/en/shell.json",
+    "scope": "Combine disjoint upstream camera labels and five newly authored backup labels; respect upstream removal of unchanged obsolete labels. No differing same-key value choices.",
+    "owned_added_keys_preserved": [
+      "backup.backUpNow",
+      "backup.backingUpNow",
+      "backup.recentBackups",
+      "backup.title",
+      "backup.warning"
+    ]
+  },
+  "portable_test_observations": {
+    "selection": "Original test/all --group noncomp; compositor/exclusive UI groups unexecuted.",
+    "noncomp_test_files": 260,
+    "passing_test_files_after_required_tracked_inputs_and_private_font_map": 236,
+    "failing_test_files_also_failing_on_unchanged_owned_base": 24,
+    "CLI_suite": "pass after supplying source Omarchy font through private ImageMagick type map; no system font installation",
+    "native_FreeBSD_or_visual_acceptance": false,
+    "initial_run": "Incomplete sparse checkout produced missing-input failures; raw run retained. Only affected files rerun after restoring actual tracked inputs.",
+    "failure_comparison": "Every remaining candidate failure reproduced once on unchanged owned base; no assertions/deadlines weakened.",
+    "new_code_regressions_observed": 0
+  }
+}
